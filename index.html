@@ -1,0 +1,1263 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chest</title>
+  <style>
+    :root {
+      --bg: #101114;
+      --panel: #1b1d23;
+      --panel-2: #242833;
+      --line: #373d4b;
+      --text: #f5f2ec;
+      --muted: #b7b2aa;
+      --white: #f4ead9;
+      --black: #4b5267;
+      --accent: #ff6fae;
+      --blue: #54b7ff;
+      --green: #6edc89;
+      --gold: #f2c94c;
+      --danger: #ff6b6b;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(255, 111, 174, .20), transparent 28rem),
+        linear-gradient(135deg, #101114 0%, #151820 52%, #111317 100%);
+    }
+
+    button, select {
+      font: inherit;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(320px, 1fr) minmax(320px, 420px);
+      gap: 18px;
+      padding: 18px;
+    }
+
+    .game {
+      display: grid;
+      grid-template-rows: auto minmax(320px, 1fr) auto;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .topbar, .side, .tray, .modal {
+      background: rgba(27, 29, 35, .92);
+      border: 1px solid var(--line);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, .28);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.7rem, 3vw, 2.9rem);
+      letter-spacing: 0;
+      line-height: .95;
+    }
+
+    .subtitle {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: .95rem;
+    }
+
+    .status {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      gap: 7px;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #20242d;
+      color: var(--text);
+      white-space: nowrap;
+      font-weight: 700;
+      font-size: .9rem;
+    }
+
+    .dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .dot.black { background: var(--blue); }
+
+    .board-wrap {
+      display: grid;
+      place-items: center;
+      min-height: 0;
+    }
+
+    .board {
+      width: min(78vh, 100%);
+      max-width: 900px;
+      aspect-ratio: 1;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      border: 3px solid #0b0c10;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, .38);
+      background: #15171c;
+    }
+
+    .cell {
+      position: relative;
+      border: 0;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      color: inherit;
+      cursor: pointer;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .cell.light { background: #ded1bb; }
+    .cell.dark { background: #566174; }
+    .cell.selected { outline: 4px solid var(--accent); outline-offset: -4px; }
+    .cell.move::after, .cell.capture::after, .cell.ability-target::after {
+      content: "";
+      position: absolute;
+      width: 28%;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: rgba(20, 20, 20, .36);
+    }
+    .cell.capture::after { background: rgba(255, 71, 87, .72); box-shadow: 0 0 0 8px rgba(255, 71, 87, .2); }
+    .cell.ability-target::after { background: rgba(242, 201, 76, .82); box-shadow: 0 0 0 8px rgba(242, 201, 76, .22); }
+    .cell.last { box-shadow: inset 0 0 0 4px rgba(110, 220, 137, .8); }
+
+    .piece {
+      width: 76%;
+      aspect-ratio: 1;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      position: relative;
+      z-index: 2;
+      border: 2px solid rgba(255,255,255,.35);
+      box-shadow: 0 8px 18px rgba(0,0,0,.28);
+      user-select: none;
+    }
+
+    .piece.white { background: linear-gradient(145deg, #fff8ea, #d7c5a8); color: #20242d; }
+    .piece.black { background: linear-gradient(145deg, #687289, #2e3443); color: #fff7eb; border-color: rgba(255,255,255,.18); }
+
+    .piece .symbol {
+      font-size: clamp(1.25rem, 4.5vw, 3.1rem);
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .hp {
+      position: absolute;
+      right: -6px;
+      bottom: -6px;
+      min-width: 24px;
+      height: 24px;
+      padding: 0 6px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: #111318;
+      color: var(--green);
+      border: 1px solid rgba(255,255,255,.25);
+      font-size: .76rem;
+      font-weight: 900;
+    }
+
+    .staff-badge, .charged-badge, .invis-badge {
+      position: absolute;
+      left: -6px;
+      top: -6px;
+      min-width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: var(--gold);
+      color: #171717;
+      font-size: .72rem;
+      font-weight: 900;
+      border: 1px solid rgba(0,0,0,.25);
+    }
+    .charged-badge { top: 20px; background: var(--danger); color: white; }
+    .invis-badge { left: auto; right: -6px; top: -6px; background: var(--blue); color: #08131f; }
+
+    .tray {
+      min-height: 74px;
+      border-radius: 8px;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .captured {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: #262b35;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-weight: 900;
+    }
+
+    .side {
+      border-radius: 8px;
+      padding: 14px;
+      overflow: auto;
+      max-height: calc(100vh - 36px);
+    }
+
+    .section + .section { margin-top: 18px; }
+    h2 { margin: 0 0 10px; font-size: 1.1rem; letter-spacing: 0; }
+
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .action, .primary {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      min-height: 42px;
+      padding: 9px 10px;
+      background: #252a35;
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 800;
+      text-align: left;
+    }
+
+    .action:hover, .primary:hover { border-color: var(--accent); }
+    .action:disabled {
+      opacity: .42;
+      cursor: not-allowed;
+      border-color: var(--line);
+    }
+
+    .primary {
+      width: 100%;
+      background: linear-gradient(135deg, #ff6fae, #54b7ff);
+      color: #111318;
+      text-align: center;
+      border: 0;
+    }
+
+    .piece-card, .log-line, .rule {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #20242d;
+      padding: 10px;
+    }
+
+    .piece-card {
+      display: grid;
+      gap: 7px;
+    }
+
+    .card-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 900;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.35;
+    }
+
+    .log {
+      display: grid;
+      gap: 8px;
+      max-height: 220px;
+      overflow: auto;
+    }
+
+    .rule-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    details.rule {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    details.rule summary {
+      cursor: pointer;
+      padding: 10px;
+      font-weight: 900;
+      color: var(--text);
+    }
+
+    details.rule .rule-body {
+      padding: 0 10px 10px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .rule-body ul {
+      margin: 8px 0 0;
+      padding-left: 18px;
+    }
+
+    .rule-body li + li {
+      margin-top: 5px;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: start;
+      justify-items: end;
+      padding: 18px;
+      background: rgba(0,0,0,.26);
+      pointer-events: none;
+      z-index: 10;
+    }
+    .overlay.show { display: grid; }
+    .modal {
+      width: min(520px, 100%);
+      max-width: min(360px, calc(100vw - 36px));
+      border-radius: 8px;
+      padding: 16px;
+      pointer-events: auto;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    @media (max-width: 920px) {
+      .app { grid-template-columns: 1fr; }
+      .side { max-height: none; }
+      .board { width: min(96vw, 76vh); }
+    }
+
+    @media (max-width: 560px) {
+      .app { padding: 10px; gap: 10px; }
+      .topbar { align-items: flex-start; flex-direction: column; }
+      .status { justify-content: flex-start; }
+      .actions { grid-template-columns: 1fr; }
+      .piece .symbol { font-size: 1.35rem; }
+      .hp { width: 20px; height: 20px; font-size: .68rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="game" aria-label="Chest game board">
+      <header class="topbar">
+        <div>
+          <h1>Chest</h1>
+          <div class="subtitle">A fully chaotic chess-checkers battle with HP, staffs, dashes, shields, charges, and royal drama.</div>
+        </div>
+        <div class="status">
+          <span class="pill"><span id="turnDot" class="dot"></span><span id="turnText">White turn</span></span>
+          <span class="pill" id="moveText">Move 1</span>
+          <span class="pill" id="modeText">Select a piece</span>
+        </div>
+      </header>
+
+      <div class="board-wrap">
+        <div id="board" class="board" role="grid" aria-label="Chest board"></div>
+      </div>
+
+      <div class="tray" aria-label="Captured pieces">
+        <strong>Captured:</strong>
+        <div id="capturedTray" class="tray-items"></div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <section class="section">
+        <button id="newGame" class="primary">New match</button>
+      </section>
+
+      <section class="section">
+        <h2>Selected Piece</h2>
+        <div id="selectedInfo" class="piece-card small">Pick a piece, bestie. Legal moves and powers show up here.</div>
+      </section>
+
+      <section class="section">
+        <h2>Abilities</h2>
+        <div id="actions" class="actions"></div>
+      </section>
+
+      <section class="section">
+        <h2>Move Log</h2>
+        <div id="log" class="log"></div>
+      </section>
+
+      <section class="section">
+        <h2>Rules Reference</h2>
+        <div class="rule-list small">
+          <details class="rule" open>
+            <summary>Pieces and HP</summary>
+            <div class="rule-body">
+              <ul>
+                <li><strong>Prawns x9:</strong> 1 HP. Move 1 square forward. From their starting prawn row, they may move 2 squares forward if both squares are empty.</li>
+                <li><strong>Castles x2:</strong> 3 HP. Move any distance in any visible straight or diagonal line until blocked. Capture by landing on an enemy.</li>
+                <li><strong>Horseys x3:</strong> 2 HP. Move diagonally any distance and may jump over pieces. They only capture by landing on an adjacent diagonal enemy unless using charge.</li>
+                <li><strong>King x1:</strong> 5 HP. Normally only moves when capturing 1 square in any direction. When in chest, it can move 1 square in any direction.</li>
+                <li><strong>Queen x1:</strong> 3 HP. Cannot normally capture. Moves 1 square diagonally and can be protected by ordered prawns.</li>
+                <li><strong>Staff x2:</strong> 1 HP. Moves up to 5 squares vertically or horizontally and captures by landing on enemies.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="rule">
+            <summary>Core Battle Rules</summary>
+            <div class="rule-body">
+              <ul>
+                <li>White goes first. Turns alternate after every move or ability.</li>
+                <li>Pieces have HP. Most attacks deal 1 damage unless boosted or using a special attack.</li>
+                <li>A piece is captured when its HP reaches 0. Captured pieces appear in the captured tray.</li>
+                <li>Capturing the enemy king ends the match.</li>
+                <li>Chest currently means the king has an enemy next to it. While in chest, the king gets normal 1-square movement.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="rule">
+            <summary>Prawn Specials</summary>
+            <div class="rule-body">
+              <ul>
+                <li><strong>Jump capture:</strong> A prawn captures like checkers by jumping over a forward-diagonal enemy into an empty square beyond it.</li>
+                <li><strong>The Dash:</strong> When a prawn reaches the far end, it dashes back to its starting prawn row in the same file.</li>
+                <li>During The Dash, enemy pieces in that file take 1 damage.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="rule">
+            <summary>Castle Specials</summary>
+            <div class="rule-body">
+              <ul>
+                <li><strong>The Rooky:</strong> A king can swap places with a friendly castle up to 5 times per match.</li>
+                <li>The Rooky cannot be used while that king is in chest.</li>
+                <li><strong>Insta movement:</strong> After move 10, each castle can once move to any empty square on the board.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="rule">
+            <summary>Horsey Specials</summary>
+            <div class="rule-body">
+              <ul>
+                <li><strong>The Charge:</strong> A horsey chooses a diagonal direction. Each charge adds 3 squares of range.</li>
+                <li>The first charge locks the direction. Releasing the charge attacks along that diagonal and can eliminate pieces in the path.</li>
+                <li>Each horsey can release charge twice per match.</li>
+                <li><strong>The What?:</strong> Once per match, each horsey can move to any empty square of the opposite colour.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="rule">
+            <summary>Staff and Royal Rules</summary>
+            <div class="rule-body">
+              <ul>
+                <li>A king or queen can pick up a friendly adjacent staff.</li>
+                <li>While holding a staff, a king or queen may also move like the staff: up to 5 squares vertically or horizontally.</li>
+                <li>A held staff can be ejected to an adjacent empty square.</li>
+                <li>If a king or queen holding a staff is attacked, the staff breaks and is no longer held.</li>
+                <li>White staff can strengthen a friendly piece for 2 turns, making its attacks deal 2 damage.</li>
+                <li>Black staff can heal an adjacent friendly piece by 1 HP.</li>
+                <li>Black staff can absorb an adjacent enemy up to 5 times per staff, capturing it and borrowing that piece's movement for 2 turns.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="rule">
+            <summary>White Abilities</summary>
+            <div class="rule-body">
+              <ul>
+                <li><strong>White jump:</strong> White can grant a friendly non-king piece a one-use jump over one piece. This can be used 5 times per match.</li>
+                <li><strong>Queen orders protection:</strong> White queen can choose the king or queen to protect. The closest 3 friendly prawns become shields. This can be used 2 times per match.</li>
+                <li>Shield prawns take damage for the protected royal piece until they are destroyed or protection is reassigned.</li>
+                <li><strong>Royal teleport:</strong> While holding a staff, white king can teleport to any empty square 3 times; white queen can do it 2 times.</li>
+                <li><strong>Staff blast:</strong> While holding a staff, white king can blast up to 5 squares forward once; white queen can blast up to 3 squares forward once.</li>
+                <li><strong>Queen of Hungary:</strong> White queen can move backward to any empty square 3 times per match.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="rule">
+            <summary>Black Abilities</summary>
+            <div class="rule-body">
+              <ul>
+                <li><strong>Invisibility:</strong> Black can make one non-king piece invisible for 2 turns, 2 times per match.</li>
+                <li>An invisible piece dodges attacks from non-kings and can only move 1 square on its next move.</li>
+                <li><strong>Queen revive:</strong> Black queen can revive a captured black piece by targeting its death square. The revived piece appears on an empty square next to the queen. This can be used 5 times per match.</li>
+                <li><strong>Time freeze:</strong> Black king can freeze an adjacent enemy for 3 turns once per match. Black queen can freeze an adjacent enemy for 2 turns once per match.</li>
+              </ul>
+            </div>
+          </details>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <div id="overlay" class="overlay">
+    <div class="modal">
+      <h2 id="modalTitle">Choose a target</h2>
+      <p id="modalText" class="small"></p>
+      <div class="modal-actions">
+        <button id="cancelAbility" class="action">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SIZE = 8;
+    const symbols = { prawn: "P", castle: "C", horsey: "H", king: "K", queen: "Q", staff: "S" };
+    const names = { prawn: "Prawn", castle: "Castle", horsey: "Horsey", king: "King", queen: "Queen", staff: "Staff" };
+    const maxHp = { prawn: 1, castle: 3, horsey: 2, king: 5, queen: 3, staff: 1 };
+    const dir = { white: -1, black: 1 };
+
+    const state = {
+      board: [],
+      selected: null,
+      legal: [],
+      turn: "white",
+      move: 1,
+      captured: [],
+      log: [],
+      ability: null,
+      last: [],
+      over: false,
+      powers: {
+        whiteJump: 5,
+        whiteQueenOrders: 2,
+        whiteKingStaffBlast: 1,
+        whiteQueenStaffBlast: 1,
+        whiteKingTeleports: 3,
+        whiteQueenTeleports: 2,
+        blackInvis: 2,
+        blackQueenRevives: 5,
+        blackKingFreeze: 1,
+        blackQueenFreeze: 1
+      }
+    };
+
+    const boardEl = document.getElementById("board");
+    const selectedInfo = document.getElementById("selectedInfo");
+    const actionsEl = document.getElementById("actions");
+    const logEl = document.getElementById("log");
+    const capturedTray = document.getElementById("capturedTray");
+    const turnText = document.getElementById("turnText");
+    const turnDot = document.getElementById("turnDot");
+    const moveText = document.getElementById("moveText");
+    const modeText = document.getElementById("modeText");
+    const overlay = document.getElementById("overlay");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalText = document.getElementById("modalText");
+
+    document.getElementById("newGame").addEventListener("click", init);
+    document.getElementById("cancelAbility").addEventListener("click", clearAbility);
+
+    function init() {
+      state.board = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+      state.selected = null;
+      state.legal = [];
+      state.turn = "white";
+      state.move = 1;
+      state.captured = [];
+      state.log = ["White goes first. Coin flip result: White."];
+      state.ability = null;
+      state.last = [];
+      state.over = false;
+      state.powers = {
+        whiteJump: 5, whiteQueenOrders: 2, whiteKingStaffBlast: 1, whiteQueenStaffBlast: 1,
+        whiteKingTeleports: 3, whiteQueenTeleports: 2, blackInvis: 2, blackQueenRevives: 5,
+        blackKingFreeze: 1, blackQueenFreeze: 1
+      };
+
+      setupSide("black", 0, 1);
+      setupSide("white", 7, 6);
+      render();
+    }
+
+    function setupSide(color, home, pawnRow) {
+      const back = [
+        ["castle", 0], ["horsey", 1], ["staff", 2], ["queen", 3],
+        ["king", 4], ["staff", 5], ["horsey", 6], ["castle", 7]
+      ];
+      back.forEach(([type, col]) => place(makePiece(type, color), home, col));
+      for (let c = 0; c < SIZE; c++) place(makePiece("prawn", color), pawnRow, c);
+    }
+
+    function makePiece(type, color) {
+      return {
+        id: crypto.randomUUID(),
+        type, color,
+        hp: maxHp[type],
+        moved: false,
+        heldStaff: false,
+        attachedTo: null,
+        charge: 0,
+        chargeDir: null,
+        chargeUses: type === "horsey" ? 2 : 0,
+        whatUsed: false,
+        instaUsed: false,
+        rookyUsed: 0,
+        invisible: 0,
+        frozen: 0,
+        boosted: 0,
+        slowed: 0,
+        shield: false,
+        shieldFor: null,
+        absorbed: null,
+        absorbedTurns: 0,
+        staffAbsorbs: 0
+      };
+    }
+
+    function place(piece, r, c) {
+      piece.r = r;
+      piece.c = c;
+      state.board[r][c] = piece;
+    }
+
+    function render() {
+      boardEl.innerHTML = "";
+      const targets = state.ability ? abilityTargets() : [];
+      for (let r = 0; r < SIZE; r++) {
+        for (let c = 0; c < SIZE; c++) {
+          const cell = document.createElement("button");
+          cell.className = `cell ${(r + c) % 2 ? "dark" : "light"}`;
+          cell.setAttribute("role", "gridcell");
+          cell.setAttribute("aria-label", `${squareName(r, c)}`);
+          if (state.selected && state.selected.r === r && state.selected.c === c) cell.classList.add("selected");
+          if (state.legal.some(m => m.r === r && m.c === c && !m.capture)) cell.classList.add("move");
+          if (state.legal.some(m => m.r === r && m.c === c && m.capture)) cell.classList.add("capture");
+          if (targets.some(t => t.r === r && t.c === c)) cell.classList.add("ability-target");
+          if (state.last.some(t => t.r === r && t.c === c)) cell.classList.add("last");
+          const piece = state.board[r][c];
+          if (piece) cell.appendChild(pieceEl(piece));
+          cell.addEventListener("click", () => onCell(r, c));
+          boardEl.appendChild(cell);
+        }
+      }
+      turnText.textContent = `${cap(state.turn)} turn`;
+      turnDot.className = `dot ${state.turn === "black" ? "black" : ""}`;
+      moveText.textContent = `Move ${state.move}`;
+      modeText.textContent = state.over ? "Game over" : state.ability ? "Choose target" : state.selected ? "Choose move" : "Select a piece";
+      renderSelected();
+      renderActions();
+      renderLog();
+      renderCaptured();
+      overlay.classList.toggle("show", Boolean(state.ability));
+    }
+
+    function pieceEl(piece) {
+      const el = document.createElement("div");
+      el.className = `piece ${piece.color}`;
+      el.title = `${cap(piece.color)} ${names[piece.type]} HP ${piece.hp}`;
+      el.innerHTML = `<span class="symbol">${symbols[piece.type]}</span><span class="hp">${piece.hp}</span>`;
+      if (piece.heldStaff || piece.attachedTo) el.insertAdjacentHTML("beforeend", `<span class="staff-badge">S</span>`);
+      if (piece.charge) el.insertAdjacentHTML("beforeend", `<span class="charged-badge">${piece.charge}</span>`);
+      if (piece.invisible) el.insertAdjacentHTML("beforeend", `<span class="invis-badge">I</span>`);
+      return el;
+    }
+
+    function onCell(r, c) {
+      if (state.over) return;
+      if (state.ability) {
+        useAbilityTarget(r, c);
+        return;
+      }
+      const piece = state.board[r][c];
+      if (state.selected) {
+        const move = state.legal.find(m => m.r === r && m.c === c);
+        if (move) {
+          doMove(state.selected, move);
+          return;
+        }
+      }
+      if (piece && piece.color === state.turn && !piece.frozen) {
+        state.selected = piece;
+        state.legal = legalMoves(piece);
+      } else {
+        state.selected = null;
+        state.legal = [];
+      }
+      render();
+    }
+
+    function legalMoves(piece) {
+      let moves = [];
+      if (piece.absorbed) {
+        const old = piece.type;
+        piece.type = piece.absorbed;
+        moves = legalMoves(piece);
+        piece.type = old;
+        return moves;
+      }
+      if (piece.slowed) return stepMoves(piece, dirs8(), true);
+      if (piece.type === "prawn") moves = prawnMoves(piece);
+      if (piece.type === "castle") moves = slideMoves(piece, dirs8(), SIZE, true);
+      if (piece.type === "horsey") moves = horseyMoves(piece);
+      if (piece.type === "king") moves = kingMoves(piece);
+      if (piece.type === "queen") moves = stepMoves(piece, [[1,1],[1,-1],[-1,1],[-1,-1]], false);
+      if (piece.type === "staff") moves = slideMoves(piece, [[1,0],[-1,0],[0,1],[0,-1]], 5, true);
+      if (piece.heldStaff && (piece.type === "king" || piece.type === "queen")) {
+        moves = mergeMoves(moves, slideMoves(piece, [[1,0],[-1,0],[0,1],[0,-1]], 5, true));
+      }
+      if (piece.jumpBoost) {
+        moves = mergeMoves(moves, jumpBoostMoves(piece));
+      }
+      return moves.filter(m => inBounds(m.r, m.c));
+    }
+
+    function prawnMoves(p) {
+      const moves = [];
+      const one = p.r + dir[p.color];
+      if (empty(one, p.c)) moves.push({ r: one, c: p.c });
+      const home = p.color === "white" ? 6 : 1;
+      if (p.r === home && empty(one, p.c) && empty(p.r + dir[p.color] * 2, p.c)) moves.push({ r: p.r + dir[p.color] * 2, c: p.c, note: "back-rank push" });
+      for (const dc of [-1, 1]) {
+        const midR = p.r + dir[p.color], midC = p.c + dc;
+        const landR = p.r + dir[p.color] * 2, landC = p.c + dc * 2;
+        if (enemyAt(midR, midC, p.color) && empty(landR, landC)) {
+          moves.push({ r: landR, c: landC, capture: { r: midR, c: midC }, damage: 1, jump: true });
+        }
+      }
+      return moves;
+    }
+
+    function horseyMoves(p) {
+      const moves = [];
+      for (const [dr, dc] of [[1,1],[1,-1],[-1,1],[-1,-1]]) {
+        for (let n = 1; n < SIZE; n++) {
+          const r = p.r + dr * n, c = p.c + dc * n;
+          if (!inBounds(r, c)) break;
+          const target = state.board[r][c];
+          if (!target) moves.push({ r, c, jump: n > 1 });
+          else {
+            if (target.color !== p.color && n === 1) moves.push({ r, c, capture: { r, c }, damage: 1 });
+            continue;
+          }
+        }
+      }
+      if (p.charge && p.chargeDir && p.chargeUses > 0) {
+        const [dr, dc] = p.chargeDir;
+        const range = p.charge * 3;
+        for (let n = 1; n <= range; n++) {
+          const r = p.r + dr * n, c = p.c + dc * n;
+          if (!inBounds(r, c)) break;
+          moves.push({ r, c, chargeAttack: true, damage: 99 });
+          if (state.board[r][c]) break;
+        }
+      }
+      return moves;
+    }
+
+    function jumpBoostMoves(p) {
+      const moves = [];
+      for (const [dr, dc] of dirs8()) {
+        const midR = p.r + dr, midC = p.c + dc;
+        const landR = p.r + dr * 2, landC = p.c + dc * 2;
+        if (inBounds(landR, landC) && state.board[midR]?.[midC] && !state.board[landR][landC]) {
+          moves.push({ r: landR, c: landC, whiteJump: true });
+        }
+      }
+      return moves;
+    }
+
+    function kingMoves(p) {
+      const threatened = isThreatened(p.color);
+      if (threatened) return stepMoves(p, dirs8(), true);
+      return stepMoves(p, dirs8(), true).filter(m => m.capture);
+    }
+
+    function stepMoves(p, ds, canCapture) {
+      const moves = [];
+      for (const [dr, dc] of ds) {
+        const r = p.r + dr, c = p.c + dc;
+        if (!inBounds(r, c)) continue;
+        const target = state.board[r][c];
+        if (!target) moves.push({ r, c });
+        else if (canCapture && target.color !== p.color) moves.push({ r, c, capture: { r, c }, damage: 1 });
+      }
+      return moves;
+    }
+
+    function slideMoves(p, ds, max, canCapture) {
+      const moves = [];
+      for (const [dr, dc] of ds) {
+        for (let n = 1; n <= max; n++) {
+          const r = p.r + dr * n, c = p.c + dc * n;
+          if (!inBounds(r, c)) break;
+          const target = state.board[r][c];
+          if (!target) moves.push({ r, c });
+          else {
+            if (canCapture && target.color !== p.color) moves.push({ r, c, capture: { r, c }, damage: p.boosted ? 2 : 1 });
+            break;
+          }
+        }
+      }
+      return moves;
+    }
+
+    function doMove(piece, move) {
+      const from = { r: piece.r, c: piece.c };
+      if (move.capture) damageAt(move.capture.r, move.capture.c, move.damage || 1, piece);
+      if (state.board[move.r][move.c] && state.board[move.r][move.c].color !== piece.color) {
+        damageAt(move.r, move.c, move.damage || 1, piece);
+        if (state.board[move.r][move.c]) return endTurn(`${names[piece.type]} hit ${names[state.board[move.r][move.c].type]} for ${move.damage || 1}.`);
+      }
+      state.board[from.r][from.c] = null;
+      state.board[move.r][move.c] = piece;
+      piece.r = move.r; piece.c = move.c; piece.moved = true;
+      state.last = [from, { r: move.r, c: move.c }];
+      let text = `${cap(piece.color)} ${names[piece.type]} moved ${squareName(from.r, from.c)} to ${squareName(move.r, move.c)}.`;
+      if (piece.type === "prawn" && (move.r === 0 || move.r === 7)) text += dash(piece);
+      if (move.whiteJump) { piece.jumpBoost = false; text += " White jump boost spent."; }
+      if (move.chargeAttack) { piece.charge = 0; piece.chargeDir = null; piece.chargeUses--; text += " Charge released."; }
+      if (piece.slowed) text += " Invisibility slow movement spent.";
+      piece.slowed = 0;
+      endTurn(text);
+    }
+
+    function damageAt(r, c, amount, attacker) {
+      const target = state.board[r][c];
+      if (!target || target.color === attacker.color) return;
+      if (target.invisible && attacker.type !== "king") {
+        addLog(`${names[target.type]} was invisible and dodged.`);
+        return;
+      }
+      if ((target.type === "king" || target.type === "queen") && redirectShieldDamage(target, amount, attacker)) return;
+      target.hp -= amount;
+      if (target.heldStaff) target.heldStaff = false;
+      if (target.hp <= 0) capturePiece(target, attacker);
+    }
+
+    function redirectShieldDamage(royal, amount, attacker) {
+      const shield = pieces().find(p => p.color === royal.color && p.shieldFor === royal.id);
+      if (!shield) return false;
+      shield.hp -= amount;
+      addLog(`${names[shield.type]} shielded ${names[royal.type]} for ${amount} damage.`);
+      if (shield.hp <= 0) capturePiece(shield, attacker);
+      return true;
+    }
+
+    function capturePiece(target, attacker) {
+      state.board[target.r][target.c] = null;
+      state.captured.push({ ...target, deathR: target.r, deathC: target.c });
+      addLog(`${cap(attacker.color)} ${names[attacker.type]} captured ${cap(target.color)} ${names[target.type]}.`);
+      if (target.type === "king") {
+        state.over = true;
+        addLog(`${cap(attacker.color)} wins by taking the king.`);
+      }
+    }
+
+    function dash(p) {
+      const start = p.color === "white" ? 6 : 1;
+      const step = p.color === "white" ? 1 : -1;
+      let r = p.r + step;
+      let text = " Dash triggered!";
+      while (inBounds(r, p.c)) {
+        const hit = state.board[r][p.c];
+        if (hit && hit.color !== p.color) {
+          hit.hp -= 1;
+          text += ` Hit ${names[hit.type]}.`;
+          if (hit.hp <= 0) capturePiece(hit, p);
+        }
+        if (r === start) break;
+        r += step;
+      }
+      state.board[p.r][p.c] = null;
+      place(p, start, p.c);
+      return text + " Prawn dashed back home.";
+    }
+
+    function endTurn(text) {
+      addLog(text);
+      clearAbility(false);
+      state.selected = null;
+      state.legal = [];
+      tickEffects();
+      if (!state.over) {
+        state.turn = other(state.turn);
+        if (state.turn === "white") state.move++;
+      }
+      render();
+    }
+
+    function tickEffects() {
+      pieces().forEach(p => {
+        if (p.frozen > 0) p.frozen--;
+        if (p.invisible > 0) p.invisible--;
+        if (p.boosted > 0) p.boosted--;
+        if (p.slowed > 0) p.slowed--;
+        if (p.absorbedTurns > 0) {
+          p.absorbedTurns--;
+          if (p.absorbedTurns === 0) p.absorbed = null;
+        }
+      });
+    }
+
+    function renderSelected() {
+      const p = state.selected;
+      if (!p) {
+        selectedInfo.textContent = "Pick a piece, bestie. Legal moves and powers show up here.";
+        return;
+      }
+      selectedInfo.innerHTML = `
+        <div class="card-title"><span>${cap(p.color)} ${names[p.type]}</span><span>${p.hp}/${maxHp[p.type]} HP</span></div>
+        <div>Legal moves: ${state.legal.length}</div>
+        <div>Staff: ${p.heldStaff ? "held" : p.attachedTo ? "attached" : "free"} | Charge: ${p.charge} (${p.chargeUses || 0} releases) | Invisible: ${p.invisible} | Frozen: ${p.frozen}</div>
+        <div>Shield: ${p.shieldFor ? "protecting royalty" : p.shield ? "active" : "none"} | Absorbed: ${p.absorbed ? names[p.absorbed] + " for " + p.absorbedTurns + " turns" : "none"}</div>
+        <div class="small">${pieceDescription(p)}</div>
+      `;
+    }
+
+    function renderActions() {
+      actionsEl.innerHTML = "";
+      const p = state.selected;
+      const actions = [
+        ["Hold/eject staff", () => staffAction(), canStaff(p)],
+        ["The Rooky", () => startAbility("rooky"), canRooky(p)],
+        ["Insta movement", () => startAbility("insta"), p?.type === "castle" && !p.instaUsed && state.move > 10],
+        ["Charge horsey", () => startAbility("charge"), p?.type === "horsey" && p.chargeUses > 0],
+        ["The What?", () => startAbility("what"), p?.type === "horsey" && !p.whatUsed],
+        ["Queen of Hungary", () => startAbility("hungary"), p?.type === "queen" && p.color === "white" && uses(p, "hungary") < 3],
+        ["Royal teleport", () => startAbility("teleport"), canTeleport(p)],
+        ["White jump order", () => startAbility("whiteJump"), p?.color === "white" && state.powers.whiteJump > 0],
+        ["Order prawn shield", () => startAbility("shield"), p?.type === "queen" && p.color === "white" && state.powers.whiteQueenOrders > 0],
+        ["Staff strengthen", () => startAbility("boost"), p?.type === "staff" && p.color === "white"],
+        ["Staff blast", () => startAbility("blast"), canBlast(p)],
+        ["Black invisibility", () => startAbility("invis"), p?.color === "black" && state.powers.blackInvis > 0],
+        ["Black queen revive", () => startAbility("revive"), p?.type === "queen" && p.color === "black" && state.powers.blackQueenRevives > 0],
+        ["Staff heal", () => startAbility("heal"), p?.type === "staff" && p.color === "black"],
+        ["Absorb ability", () => startAbility("absorb"), p?.type === "staff" && p.color === "black" && p.staffAbsorbs < 5],
+        ["Time freeze", () => startAbility("freeze"), canFreeze(p)]
+      ];
+      actions.forEach(([label, fn, enabled]) => {
+        const b = document.createElement("button");
+        b.className = "action";
+        b.textContent = label;
+        b.disabled = !enabled;
+        b.addEventListener("click", fn);
+        actionsEl.appendChild(b);
+      });
+    }
+
+    function startAbility(kind) {
+      if (!state.selected) return;
+      state.ability = { kind, piece: state.selected };
+      modalTitle.textContent = abilityTitle(kind);
+      modalText.textContent = abilityText(kind);
+      render();
+    }
+
+    function abilityTargets() {
+      const p = state.ability?.piece;
+      const kind = state.ability?.kind;
+      if (!p) return [];
+      const all = [];
+      for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) all.push({ r, c });
+      if (kind === "insta" || kind === "teleport") return all.filter(t => !state.board[t.r][t.c]);
+      if (kind === "what") return all.filter(t => !state.board[t.r][t.c] && (t.r + t.c) % 2 !== (p.r + p.c) % 2);
+      if (kind === "hungary") return all.filter(t => !state.board[t.r][t.c] && t.r * dir[p.color] > p.r * dir[p.color]);
+      if (kind === "charge") return diagTargets(p);
+      if (kind === "rooky") return pieces().filter(x => x.color === p.color && x.type === "castle").map(x => ({ r: x.r, c: x.c }));
+      if (kind === "whiteJump" || kind === "boost" || kind === "invis") return pieces().filter(x => x.color === p.color && x.type !== "king").map(x => ({ r: x.r, c: x.c }));
+      if (kind === "shield") return pieces().filter(x => x.color === p.color && (x.type === "king" || x.type === "queen")).map(x => ({ r: x.r, c: x.c }));
+      if (kind === "blast") return rayTargets(p, p.type === "king" ? 5 : 3);
+      if (kind === "heal") return adjacent(p).filter(t => state.board[t.r][t.c]?.color === p.color);
+      if (kind === "absorb" || kind === "freeze") return adjacent(p).filter(t => state.board[t.r][t.c]?.color !== p.color);
+      if (kind === "revive") return state.captured.filter(x => x.color === "black" && !state.board[x.deathR]?.[x.deathC] && adjacent(p).some(t => !state.board[t.r][t.c])).map(x => ({ r: x.deathR, c: x.deathC }));
+      return [];
+    }
+
+    function useAbilityTarget(r, c) {
+      if (!abilityTargets().some(t => t.r === r && t.c === c)) return;
+      const p = state.ability.piece;
+      const kind = state.ability.kind;
+      let text = "";
+      if (kind === "insta" || kind === "teleport" || kind === "what" || kind === "hungary") {
+        moveDirect(p, r, c);
+        if (kind === "insta") p.instaUsed = true;
+        if (kind === "what") p.whatUsed = true;
+        if (kind === "hungary") p.hungary = (p.hungary || 0) + 1;
+        if (kind === "teleport") state.powers[p.color === "white" && p.type === "king" ? "whiteKingTeleports" : "whiteQueenTeleports"]--;
+        text = `${cap(p.color)} ${names[p.type]} used ${abilityTitle(kind)}.`;
+      }
+      if (kind === "charge") {
+        p.charge++;
+        p.chargeDir = [Math.sign(r - p.r), Math.sign(c - p.c)];
+        text = `Horsey charged toward ${squareName(r, c)}. Range is now ${p.charge * 3}.`;
+      }
+      if (kind === "rooky") {
+        const castle = state.board[r][c];
+        swap(p, castle);
+        p.rookyUsed++;
+        text = "The Rooky swapped king and castle.";
+      }
+      if (kind === "whiteJump") {
+        const target = state.board[r][c];
+        target.jumpBoost = true;
+        state.powers.whiteJump--;
+        text = `${names[target.type]} got one white jump boost.`;
+      }
+      if (kind === "shield") {
+        const royal = state.board[r][c];
+        pieces().forEach(x => {
+          if (x.color === royal.color && x.shieldFor === royal.id) {
+            x.shield = false;
+            x.shieldFor = null;
+          }
+        });
+        pieces()
+          .filter(x => x.color === royal.color && x.type === "prawn")
+          .sort((a, b) => distance(a, royal) - distance(b, royal))
+          .slice(0, 3)
+          .forEach(x => {
+            x.shield = true;
+            x.shieldFor = royal.id;
+          });
+        state.powers.whiteQueenOrders--;
+        text = `White queen ordered three prawns to protect the ${names[royal.type]}.`;
+      }
+      if (kind === "boost") {
+        const target = state.board[r][c];
+        target.boosted = 2;
+        text = `${names[target.type]} is strengthened for double damage.`;
+      }
+      if (kind === "blast") {
+        const target = state.board[r][c];
+        damageAt(r, c, 99, p);
+        text = `${names[p.type]} used staff blast on ${target ? names[target.type] : "a square"}.`;
+        if (p.type === "king") state.powers.whiteKingStaffBlast--;
+        else state.powers.whiteQueenStaffBlast--;
+      }
+      if (kind === "invis") {
+        state.board[r][c].invisible = 2;
+        state.board[r][c].slowed = 1;
+        state.powers.blackInvis--;
+        text = "Black made a piece invisible for 2 turns; it can only move 1 square next move.";
+      }
+      if (kind === "heal") {
+        const target = state.board[r][c];
+        target.hp = Math.min(maxHp[target.type], target.hp + 1);
+        text = `${names[target.type]} healed 1 HP.`;
+      }
+      if (kind === "absorb") {
+        const target = state.board[r][c];
+        p.absorbed = target.type;
+        p.absorbedTurns = 2;
+        p.staffAbsorbs++;
+        capturePiece(target, p);
+        text = `Black staff absorbed ${names[target.type]} powers for 2 turns.`;
+      }
+      if (kind === "freeze") {
+        const target = state.board[r][c];
+        target.frozen = p.type === "king" ? 3 : 2;
+        if (p.type === "king") state.powers.blackKingFreeze--;
+        else state.powers.blackQueenFreeze--;
+        text = `${names[p.type]} froze ${names[target.type]}.`;
+      }
+      if (kind === "revive") {
+        reviveAt(r, c, p);
+        state.powers.blackQueenRevives--;
+        text = "Black queen revived a captured piece.";
+      }
+      endTurn(text);
+    }
+
+    function staffAction() {
+      const p = state.selected;
+      if (!p) return;
+      if (p.heldStaff) {
+        const spot = adjacent(p).find(t => empty(t.r, t.c));
+        if (!spot) return addLog("No room to eject the staff.");
+        const staff = makePiece("staff", p.color);
+        place(staff, spot.r, spot.c);
+        p.heldStaff = false;
+        endTurn(`${names[p.type]} ejected the staff.`);
+        return;
+      }
+      const staffSpot = adjacent(p).find(t => state.board[t.r][t.c]?.type === "staff" && state.board[t.r][t.c].color === p.color);
+      if (staffSpot && (p.type === "king" || p.type === "queen")) {
+        state.board[staffSpot.r][staffSpot.c] = null;
+        p.heldStaff = true;
+        endTurn(`${names[p.type]} picked up the staff.`);
+      }
+    }
+
+    function reviveAt(r, c, queen) {
+      const dead = state.captured.find(x => x.color === "black" && x.deathR === r && x.deathC === c);
+      const spot = adjacent(queen).find(t => !state.board[t.r][t.c]);
+      if (!dead || state.board[r][c] || !spot) return;
+      state.captured = state.captured.filter(x => x.id !== dead.id);
+      dead.hp = Math.max(1, maxHp[dead.type] - 1);
+      place(dead, spot.r, spot.c);
+    }
+
+    function clearAbility(rerender = true) {
+      state.ability = null;
+      if (rerender) render();
+    }
+
+    function addLog(text) {
+      state.log.unshift(text);
+      state.log = state.log.slice(0, 24);
+    }
+
+    function renderLog() {
+      logEl.innerHTML = state.log.map(line => `<div class="log-line small">${escapeHtml(line)}</div>`).join("");
+    }
+
+    function renderCaptured() {
+      capturedTray.innerHTML = state.captured.map(p => `<span class="captured" title="${cap(p.color)} ${names[p.type]}">${p.color[0].toUpperCase()}${symbols[p.type]}</span>`).join("");
+    }
+
+    function moveDirect(p, r, c) {
+      state.last = [{ r: p.r, c: p.c }, { r, c }];
+      state.board[p.r][p.c] = null;
+      place(p, r, c);
+    }
+
+    function swap(a, b) {
+      const ar = a.r, ac = a.c, br = b.r, bc = b.c;
+      state.board[ar][ac] = b; state.board[br][bc] = a;
+      a.r = br; a.c = bc; b.r = ar; b.c = ac;
+      state.last = [{ r: ar, c: ac }, { r: br, c: bc }];
+    }
+
+    function pieceDescription(p) {
+      return {
+        prawn: "Forward mover, checkers jump capture, dash on the end rank.",
+        castle: "Sees in 8 directions until blocked; can capture by landing.",
+        horsey: "Diagonal jumper; adjacent diagonal captures; can charge and colour-hop.",
+        king: "Captures one step unless in chest, then moves freely one step.",
+        queen: "Shield piece that steps diagonally; special backwards Hungary move.",
+        staff: "Slides up to 5 orthogonally, can attach to royalty, heal, boost, or absorb."
+      }[p.type];
+    }
+
+    function abilityTitle(kind) {
+      return ({
+        insta: "Insta movement", teleport: "Royal teleport", what: "The What?", hungary: "Queen of Hungary",
+        charge: "The Charge", rooky: "The Rooky", whiteJump: "White jump", shield: "Prawn protection",
+        boost: "Staff strengthen", blast: "Staff annihilate", invis: "Invisibility", revive: "Revive",
+        heal: "Heal", absorb: "Absorb", freeze: "Time freeze"
+      })[kind];
+    }
+
+    function abilityText(kind) {
+      return ({
+        insta: "Pick any empty square. Castles can do this once after the first ten moves.",
+        teleport: "Pick any empty square. White king has 3 uses, white queen has 2.",
+        what: "Pick an empty square of the other colour.",
+        hungary: "Move the queen backward as far as you want.",
+        charge: "Pick a diagonal direction. Each charge adds 3 attack squares.",
+        rooky: "Pick a friendly castle to swap places with the king.",
+        whiteJump: "Pick a friendly non-king piece to grant a jump boost.",
+        shield: "Pick a prawn to begin protecting royalty.",
+        boost: "Pick a friendly piece to deal double damage for 2 turns.",
+        blast: "Pick a target in front of the staff-holder.",
+        invis: "Pick a friendly non-king piece to become invisible.",
+        revive: "Pick an empty square next to the queen to revive the first captured black piece.",
+        heal: "Pick an adjacent friendly piece to heal.",
+        absorb: "Pick an adjacent enemy to eat and borrow its movement.",
+        freeze: "Pick an adjacent enemy to freeze."
+      })[kind] || "";
+    }
+
+    function canStaff(p) {
+      if (!p || !(p.type === "king" || p.type === "queen")) return false;
+      return p.heldStaff || adjacent(p).some(t => state.board[t.r][t.c]?.type === "staff" && state.board[t.r][t.c].color === p.color);
+    }
+    function canRooky(p) { return p?.type === "king" && p.rookyUsed < 5 && !isThreatened(p.color) && pieces().some(x => x.color === p.color && x.type === "castle"); }
+    function canTeleport(p) { return p?.color === "white" && ((p.type === "king" && state.powers.whiteKingTeleports > 0) || (p.type === "queen" && state.powers.whiteQueenTeleports > 0)) && p.heldStaff; }
+    function canBlast(p) { return p?.color === "white" && p.heldStaff && ((p.type === "king" && state.powers.whiteKingStaffBlast > 0) || (p.type === "queen" && state.powers.whiteQueenStaffBlast > 0)); }
+    function canFreeze(p) { return p?.color === "black" && ((p.type === "king" && state.powers.blackKingFreeze > 0) || (p.type === "queen" && state.powers.blackQueenFreeze > 0)); }
+    function uses(p, key) { return p?.[key] || 0; }
+
+    function isThreatened(color) {
+      const king = pieces().find(p => p.color === color && p.type === "king");
+      if (!king) return false;
+      return pieces().some(p => p.color !== color && Math.abs(p.r - king.r) <= 1 && Math.abs(p.c - king.c) <= 1);
+    }
+
+    function pieces() { return state.board.flat().filter(Boolean); }
+    function adjacent(p) { return dirs8().map(([dr, dc]) => ({ r: p.r + dr, c: p.c + dc })).filter(t => inBounds(t.r, t.c)); }
+    function distance(a, b) { return Math.abs(a.r - b.r) + Math.abs(a.c - b.c); }
+    function diagTargets(p) { return [[1,1],[1,-1],[-1,1],[-1,-1]].map(([dr, dc]) => ({ r: p.r + dr, c: p.c + dc })).filter(t => inBounds(t.r, t.c)); }
+    function rayTargets(p, limit) {
+      const out = [];
+      const forward = dir[p.color];
+      for (let n = 1; n <= limit; n++) {
+        const r = p.r + forward * n, c = p.c;
+        if (!inBounds(r, c)) break;
+        out.push({ r, c });
+      }
+      return out;
+    }
+    function dirs8() { return [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]; }
+    function mergeMoves(a, b) {
+      const seen = new Set();
+      return [...a, ...b].filter(m => {
+        const key = `${m.r},${m.c},${Boolean(m.capture)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+    function empty(r, c) { return inBounds(r, c) && !state.board[r][c]; }
+    function enemyAt(r, c, color) { return inBounds(r, c) && state.board[r][c] && state.board[r][c].color !== color; }
+    function inBounds(r, c) { return r >= 0 && r < SIZE && c >= 0 && c < SIZE; }
+    function other(color) { return color === "white" ? "black" : "white"; }
+    function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+    function squareName(r, c) { return `${String.fromCharCode(65 + c)}${SIZE - r}`; }
+    function escapeHtml(s) { return s.replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])); }
+
+    init();
+  </script>
+</body>
+</html>
