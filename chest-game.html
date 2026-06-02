@@ -247,6 +247,34 @@
     .section + .section { margin-top: 18px; }
     h2 { margin: 0 0 10px; font-size: 1.1rem; letter-spacing: 0; }
 
+    .online-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .online-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+    }
+
+    .text-input {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 10px;
+      background: #111318;
+      color: var(--text);
+      font: inherit;
+      font-weight: 800;
+    }
+
+    .text-input:focus {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
     .actions {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -417,6 +445,19 @@
       </section>
 
       <section class="section">
+        <h2>Online Multiplayer</h2>
+        <div class="online-grid">
+          <button id="hostGame" class="action">Host room</button>
+          <div class="online-row">
+            <input id="roomInput" class="text-input" maxlength="16" placeholder="Room code" aria-label="Room code" />
+            <button id="joinGame" class="action">Join</button>
+          </div>
+          <button id="copyRoom" class="action" disabled>Copy room link</button>
+          <div id="onlineStatus" class="piece-card small">Offline local match.</div>
+        </div>
+      </section>
+
+      <section class="section">
         <h2>Selected Piece</h2>
         <div id="selectedInfo" class="piece-card small">Pick a piece, bestie. Legal moves and powers show up here.</div>
       </section>
@@ -550,6 +591,7 @@
     </div>
   </div>
 
+  <script src="peerjs.min.js"></script>
   <script>
     const SIZE = 8;
     const symbols = { prawn: "P", castle: "C", horsey: "H", king: "K", queen: "Q", staff: "S" };
@@ -568,6 +610,11 @@
       ability: null,
       last: [],
       over: false,
+      online: {
+        role: "local",
+        room: "",
+        connected: false
+      },
       powers: {
         whiteJump: 5,
         whiteQueenOrders: 2,
@@ -594,21 +641,39 @@
     const overlay = document.getElementById("overlay");
     const modalTitle = document.getElementById("modalTitle");
     const modalText = document.getElementById("modalText");
+    const hostGameBtn = document.getElementById("hostGame");
+    const joinGameBtn = document.getElementById("joinGame");
+    const copyRoomBtn = document.getElementById("copyRoom");
+    const roomInput = document.getElementById("roomInput");
+    const onlineStatus = document.getElementById("onlineStatus");
+
+    let peer = null;
+    let conn = null;
+    let applyingRemote = false;
 
     document.getElementById("newGame").addEventListener("click", init);
     document.getElementById("cancelAbility").addEventListener("click", clearAbility);
+    hostGameBtn.addEventListener("click", hostRoom);
+    joinGameBtn.addEventListener("click", () => joinRoom(roomInput.value.trim()));
+    copyRoomBtn.addEventListener("click", copyRoomLink);
+
+    const startRoom = new URLSearchParams(location.search).get("room");
+    if (startRoom) roomInput.value = startRoom.toUpperCase();
 
     function init() {
+      const online = state.online || { role: "local", room: "", connected: false };
+      const coin = Math.random() < 0.5 ? "white" : "black";
       state.board = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
       state.selected = null;
       state.legal = [];
-      state.turn = "white";
+      state.turn = coin;
       state.move = 1;
       state.captured = [];
-      state.log = ["White goes first. Coin flip result: White."];
+      state.log = [`Coin flip result: ${cap(coin)} goes first.`];
       state.ability = null;
       state.last = [];
       state.over = false;
+      state.online = online;
       state.powers = {
         whiteJump: 5, whiteQueenOrders: 2, whiteKingStaffBlast: 1, whiteQueenStaffBlast: 1,
         whiteKingTeleports: 3, whiteQueenTeleports: 2, blackInvis: 2, blackQueenRevives: 5,
@@ -618,6 +683,7 @@
       setupSide("black", 0, 1);
       setupSide("white", 7, 6);
       render();
+      syncOnline("state");
     }
 
     function setupSide(color, home, pawnRow) {
@@ -689,6 +755,7 @@
       renderActions();
       renderLog();
       renderCaptured();
+      renderOnline();
       overlay.classList.toggle("show", Boolean(state.ability));
     }
 
@@ -725,6 +792,7 @@
         state.legal = [];
       }
       render();
+      syncOnline("state");
     }
 
     function legalMoves(piece) {
@@ -1143,6 +1211,155 @@
       if (rerender) render();
     }
 
+    function publicState() {
+      return {
+        board: state.board,
+        selected: null,
+        legal: [],
+        turn: state.turn,
+        move: state.move,
+        captured: state.captured,
+        log: state.log,
+        ability: null,
+        last: state.last,
+        over: state.over,
+        online: state.online,
+        powers: state.powers
+      };
+    }
+
+    function applyRemoteState(remote) {
+      applyingRemote = true;
+      state.board = remote.board;
+      state.selected = null;
+      state.legal = [];
+      state.turn = remote.turn;
+      state.move = remote.move;
+      state.captured = remote.captured;
+      state.log = remote.log;
+      state.ability = null;
+      state.last = remote.last;
+      state.over = remote.over;
+      state.powers = remote.powers;
+      state.online = { ...state.online, connected: true };
+      render();
+      applyingRemote = false;
+    }
+
+    function syncOnline(type) {
+      if (applyingRemote || !conn || !conn.open) return;
+      conn.send({ type, state: publicState() });
+    }
+
+    function hostRoom() {
+      closeOnline();
+      const room = makeRoomCode();
+      state.online = { role: "host", room, connected: false };
+      if (!window.Peer) {
+        addLog("Online multiplayer could not load. Check internet, then reload.");
+        render();
+        return;
+      }
+      peer = new Peer(`chest-${room}`);
+      peer.on("open", () => {
+        roomInput.value = room;
+        addLog(`Online room ${room} is ready. Waiting for player 2.`);
+        render();
+      });
+      peer.on("connection", c => {
+        conn = c;
+        setupConnection();
+      });
+      peer.on("error", err => {
+        addLog(`Online error: ${err.type || err.message}`);
+        render();
+      });
+      render();
+    }
+
+    function joinRoom(room) {
+      if (!room) return;
+      closeOnline();
+      room = room.toUpperCase();
+      state.online = { role: "guest", room, connected: false };
+      if (!window.Peer) {
+        addLog("Online multiplayer could not load. Check internet, then reload.");
+        render();
+        return;
+      }
+      peer = new Peer();
+      peer.on("open", () => {
+        conn = peer.connect(`chest-${room}`, { reliable: true });
+        setupConnection();
+        render();
+      });
+      peer.on("error", err => {
+        addLog(`Online error: ${err.type || err.message}`);
+        render();
+      });
+      render();
+    }
+
+    function setupConnection() {
+      conn.on("open", () => {
+        state.online.connected = true;
+        addLog(state.online.role === "host" ? "Player 2 joined the room." : "Joined online room.");
+        if (state.online.role === "host") syncOnline("state");
+        render();
+      });
+      conn.on("data", msg => {
+        if (msg?.type === "state" && msg.state) applyRemoteState(msg.state);
+      });
+      conn.on("close", () => {
+        state.online.connected = false;
+        addLog("Online player disconnected.");
+        render();
+      });
+    }
+
+    function closeOnline() {
+      if (conn) conn.close();
+      if (peer) peer.destroy();
+      conn = null;
+      peer = null;
+    }
+
+    function renderOnline() {
+      const o = state.online || { role: "local", room: "", connected: false };
+      copyRoomBtn.disabled = !o.room;
+      if (o.role === "local") {
+        onlineStatus.textContent = "Offline local match.";
+        return;
+      }
+      const link = roomLink(o.room);
+      onlineStatus.innerHTML = `
+        <div class="card-title"><span>${o.role === "host" ? "Hosting" : "Joined"} ${escapeHtml(o.room)}</span><span>${o.connected ? "Connected" : "Waiting"}</span></div>
+        <div>Share link: ${escapeHtml(link)}</div>
+        <div class="small">Both players see the same board. Moves sync after each turn or ability.</div>
+      `;
+    }
+
+    async function copyRoomLink() {
+      const room = state.online?.room;
+      if (!room) return;
+      const link = roomLink(room);
+      try {
+        await navigator.clipboard.writeText(link);
+        addLog("Room link copied.");
+      } catch {
+        addLog(`Room link: ${link}`);
+      }
+      render();
+    }
+
+    function roomLink(room) {
+      return `${location.origin}${location.pathname}?room=${encodeURIComponent(room)}`;
+    }
+
+    function makeRoomCode() {
+      return Math.random().toString(36).slice(2, 8).toUpperCase();
+    }
+
     function addLog(text) {
       state.log.unshift(text);
       state.log = state.log.slice(0, 24);
@@ -1258,6 +1475,9 @@
     function escapeHtml(s) { return s.replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])); }
 
     init();
+    if (startRoom) {
+      setTimeout(() => joinRoom(startRoom), 500);
+    }
   </script>
 </body>
 </html>
