@@ -640,6 +640,7 @@
         connected: false,
         color: null
       },
+      playerColor: null,
       powers: {
         whiteJump: 5,
         whiteQueenOrders: 2,
@@ -693,6 +694,7 @@ document.getElementById("clearDebug").addEventListener("click", () => { state.de
 
     function init() {
       const online = state.online || { role: "local", room: "", connected: false, color: null };
+const playerColor = state.playerColor;
       const coin = Math.random() < 0.5 ? "white" : "black";
       state.board = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
       state.selected = null;
@@ -707,6 +709,7 @@ document.getElementById("clearDebug").addEventListener("click", () => { state.de
       state.timeStop = null;
       state.captureAnim = null;
       state.debugLog = [];
+      state.playerColor = playerColor;
       state.online = online;
       state.powers = {
         whiteJump: 5, whiteQueenOrders: 2, whiteKingStaffBlast: 1, whiteQueenStaffBlast: 1,
@@ -824,7 +827,8 @@ if (piece.shield) el.insertAdjacentHTML("beforeend", `<span class="invis-badge" 
           return;
         }
       }
-      const myColor = state.online?.color;
+      const myColor = state.playerColor;
+if (state.online?.role !== "local" && !myColor) return;
 if (state.online?.role !== "local" && myColor && state.turn !== myColor) {
   state.selected = null;
   state.legal = [];
@@ -1154,7 +1158,7 @@ if (didCapture) {
         ["Absorb ability", () => startAbility("absorb"), p?.type === "staff" && p.color === "black" && p.staffAbsorbs < 5],
         ["Time stop", () => timeStopAction(), canTimeStop(p)]
       ];
-      const myColorRA = state.online?.color;
+      const myColorRA = state.playerColor;
       const myTurnRA = state.online?.role === "local" || state.turn === myColorRA;
       actions.forEach(([label, fn, enabled]) => {
         const b = document.createElement("button");
@@ -1168,7 +1172,7 @@ if (didCapture) {
 
     function startAbility(kind) {
       if (!state.selected) return;
-      const myColor = state.online?.color;
+      const myColor = state.playerColor;
       if (state.online?.role !== "local" && (state.turn !== myColor || state.selected.color !== myColor)) return;
       state.ability = { kind, piece: state.selected };
       modalTitle.textContent = abilityTitle(kind);
@@ -1331,7 +1335,7 @@ if (kind === "boost" || kind === "invis") return pieces().filter(x => x.color ==
     function staffAction() {
       const p = state.selected;
       if (!p) return;
-      const myColorSA = state.online?.color;
+      const myColorSA = state.playerColor;
       if (state.online?.role !== "local" && (state.turn !== myColorSA || p.color !== myColorSA)) return;
       if (p.heldStaff) {
         const spot = adjacent(p).find(t => empty(t.r, t.c));
@@ -1458,11 +1462,25 @@ if (kind === "boost" || kind === "invis") return pieces().filter(x => x.color ==
     function setupConnection() {
       conn.on("open", () => {
         state.online.connected = true;
-        addLog(state.online.role === "host" ? "Player 2 joined the room." : "Joined online room.");
-        if (state.online.role === "host") syncOnline("state");
+        if (state.online.role === "host") {
+          const hostWhite = Math.random() < 0.5;
+          state.playerColor = hostWhite ? "white" : "black";
+          const guestColor = hostWhite ? "black" : "white";
+          conn.send({ type: "color", color: guestColor });
+          addLog("Player 2 joined. Coin flip: " + (hostWhite ? "Host" : "Guest") + " is White.");
+        } else {
+          addLog("Joined online room. Waiting for side assignment.");
+        }
         render();
+        if (state.online.role === "host") syncOnline("state");
       });
       conn.on("data", msg => {
+        if (msg?.type === "color" && msg.color) {
+          state.playerColor = msg.color;
+          addLog("You are " + msg.color + ".");
+          render();
+          return;
+        }
         if (msg?.type === "state" && msg.state) applyRemoteState(msg.state);
       });
       conn.on("close", () => {
@@ -1489,7 +1507,7 @@ if (kind === "boost" || kind === "invis") return pieces().filter(x => x.color ==
       const link = roomLink(o.room);
       onlineStatus.innerHTML = `
         <div class="card-title"><span>${o.role === "host" ? "Hosting" : "Joined"} ${escapeHtml(o.room)}</span><span>${o.connected ? "Connected" : "Waiting"}</span></div>
-        <div class="small">You control: ${escapeHtml(o.color || "spectating")}</div>
+        <div class="small">You control: ${escapeHtml(state.playerColor || "spectating")}</div>
         <div>Share link: ${escapeHtml(link)}</div>
         <div class="small">Both players see the same board. Moves sync after each turn or ability.</div>
       `;
@@ -1602,7 +1620,7 @@ function pieceDescription(p) {
     function timeStopAction() {
   const p = state.selected;
   if (!p) return;
-  const myColor = state.online?.color;
+  const myColor = state.playerColor;
   if (state.online?.role !== "local" && (state.turn !== myColor || p.color !== myColor)) return;
   if (!canTimeStop(p)) return;
   const turns = p.type === "king" ? 3 : 2;
