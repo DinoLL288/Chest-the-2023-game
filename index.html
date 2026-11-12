@@ -1245,7 +1245,12 @@ if (kind === "boost" || kind === "invis") return pieces().filter(x => x.color ==
         });
         pieces()
           .filter(x => x.color === royal.color && x.type === "prawn")
-          .sort((a, b) => distance(a, royal) - distance(b, royal))
+          .sort((a, b) => {
+      const frontA = (royal.color === "white" ? a.r < royal.r : a.r > royal.r) ? 0 : 1;
+      const frontB = (royal.color === "white" ? b.r < royal.r : b.r > royal.r) ? 0 : 1;
+      if (frontA !== frontB) return frontA - frontB;
+      return distance(a, royal) - distance(b, royal);
+    })
           .slice(0, 3)
           .forEach(x => {
             x.shield = true;
