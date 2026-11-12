@@ -803,6 +803,7 @@ renderDebugLog();
       el.title = `${cap(piece.color)} ${names[piece.type]} HP ${piece.hp}`;
       el.innerHTML = `<span class="symbol">${symbols[piece.type]}</span><span class="hp">${piece.hp}</span>`;
       if (piece.heldStaff || piece.attachedTo) el.insertAdjacentHTML("beforeend", `<span class="staff-badge">S</span>`);
+if (piece.shield) el.insertAdjacentHTML("beforeend", `<span class="invis-badge" style="background:#6edc89;color:#08131f;">Sh</span>`);
       if (piece.charge) el.insertAdjacentHTML("beforeend", `<span class="charged-badge">${piece.charge}</span>`);
       if (piece.invisible) el.insertAdjacentHTML("beforeend", `<span class="invis-badge">I</span>`);
       return el;
@@ -1251,6 +1252,9 @@ if (kind === "boost" || kind === "invis") return pieces().filter(x => x.color ==
             x.shieldFor = royal.id;
           });
         state.powers.whiteQueenOrders--;
+        const shieldNames = pieces().filter(x => x.shieldFor === royal.id).map(x => names[x.type]).join(", ");
+        state.debugLog.push("[SHIELD] protected " + names[royal.type] + " with " + shieldNames);
+        renderDebugLog();
         text = `White queen ordered three prawns to protect the ${names[royal.type]}.`;
       }
       if (kind === "boost") {
