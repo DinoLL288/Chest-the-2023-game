@@ -718,7 +718,8 @@
         frozen: 0,
         boosted: 0,
         slowed: 0,
-        shield: false,
+        dashDamaged: 0,
+shield: false,
         shieldFor: null,
         absorbed: null,
         absorbedTurns: 0,
@@ -854,7 +855,7 @@
           const target = state.board[r][c];
           if (!target) moves.push({ r, c, jump: n > 1 });
           else {
-            if (target.color !== p.color && n === 1) moves.push({ r, c, capture: { r, c }, damage: 1 });
+            if (target.color !== p.color) moves.push({ r, c, capture: { r, c }, damage: 1 });
             continue;
           }
         }
@@ -1014,6 +1015,7 @@
         const hit = state.board[r][p.c];
         if (hit && hit.color !== p.color) {
           hit.hp -= 1;
+          hit.dashDamaged = (hit.dashDamaged || 0) + 1;
           text += ` Hit ${names[hit.type]}.`;
           if (hit.hp <= 0) capturePiece(hit, p);
         }
@@ -1133,10 +1135,11 @@
 });
       if (kind === "charge") return diagTargets(p);
       if (kind === "rooky") return pieces().filter(x => x.color === p.color && x.type === "castle").map(x => ({ r: x.r, c: x.c }));
-      if (kind === "whiteJump" || kind === "boost" || kind === "invis") return pieces().filter(x => x.color === p.color && x.type !== "king").map(x => ({ r: x.r, c: x.c }));
+      if (kind === "whiteJump") return pieces().filter(x => x.color === p.color).map(x => ({ r: x.r, c: x.c }));
+if (kind === "boost" || kind === "invis") return pieces().filter(x => x.color === p.color && x.type !== "king").map(x => ({ r: x.r, c: x.c }));
       if (kind === "shield") return pieces().filter(x => x.color === p.color && (x.type === "king" || x.type === "queen")).map(x => ({ r: x.r, c: x.c }));
       if (kind === "blast") return rayTargets(p, p.type === "king" ? 5 : 3);
-      if (kind === "heal") return adjacent(p).filter(t => state.board[t.r][t.c]?.color === p.color);
+      if (kind === "heal") return adjacent(p).filter(t => state.board[t.r][t.c]?.color === p.color && state.board[t.r][t.c]?.dashDamaged > 0);
       if (kind === "absorb") return adjacent(p).filter(t => state.board[t.r][t.c]?.color !== p.color);
       if (kind === "revive") return state.captured.filter(x => x.color === "black" && !state.board[x.deathR]?.[x.deathC] && adjacent(p).some(t => !state.board[t.r][t.c])).map(x => ({ r: x.deathR, c: x.deathC }));
       return [];
@@ -1172,7 +1175,7 @@
       }
       if (kind === "charge") {
         p.charge++;
-        p.chargeDir = [Math.sign(r - p.r), Math.sign(c - p.c)];
+        if (!p.chargeDir) p.chargeDir = [Math.sign(r - p.r), Math.sign(c - p.c)];
         text = `Horsey charged toward ${squareName(r, c)}. Range is now ${p.charge * 3}.`;
       }
       if (kind === "rooky") {
@@ -1236,6 +1239,7 @@
       if (kind === "heal") {
         const target = state.board[r][c];
         target.hp = Math.min(maxHp[target.type], target.hp + 1);
+        if (target.dashDamaged > 0) target.dashDamaged--;
         text = `${names[target.type]} healed 1 HP.`;
       }
       if (kind === "absorb") {
