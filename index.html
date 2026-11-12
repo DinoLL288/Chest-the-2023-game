@@ -1055,10 +1055,10 @@ shield: false,
     function tickEffects() {
       pieces().forEach(p => {
         if (p.frozen > 0) p.frozen--;
-        if (p.invisible > 0) p.invisible--;
-        if (p.boosted > 0) p.boosted--;
+        if (p.invisible > 0 && p.color === state.turn) p.invisible--;
+        if (p.boosted > 0 && p.color === state.turn) p.boosted--;
         
-        if (p.absorbedTurns > 0) {
+        if (p.absorbedTurns > 0 && p.color === state.turn) {
           p.absorbedTurns--;
           if (p.absorbedTurns === 0) p.absorbed = null;
         }
