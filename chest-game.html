@@ -1137,7 +1137,7 @@ if (didCapture) {
         ["Queen of Hungary", () => startAbility("hungary"), (p?.type === "queen" || p?.absorbed === "queen") && p.color === "white" && uses(p, "hungary") < 3],
         ["Royal teleport", () => startAbility("teleport"), canTeleport(p)],
         ["White jump order", () => startAbility("whiteJump"), p?.color === "white" && state.powers.whiteJump > 0],
-        ["Order prawn shield", () => startAbility("shield"), p?.type === "queen" && p.color === "white" && state.powers.whiteQueenOrders > 0],
+        ["Royal Guard", () => startAbility("shield"), p?.type === "queen" && p.color === "white" && state.powers.whiteQueenOrders > 0],
         ["Staff strengthen", () => startAbility("boost"), p?.type === "staff" && p.color === "white" && state.powers.whiteStaffBoost > 0],
         ["Staff blast", () => startAbility("blast"), canBlast(p)],
         ["Black invisibility", () => startAbility("invis"), p?.color === "black" && state.powers.blackInvis > 0],
@@ -1558,7 +1558,7 @@ function pieceDescription(p) {
     function abilityTitle(kind) {
       return ({
         insta: "Insta movement", teleport: "Royal teleport", what: "The What?", hungary: "Queen of Hungary",
-        charge: "The Charge", rooky: "The Rooky", whiteJump: "White jump", shield: "Prawn protection",
+        charge: "The Charge", rooky: "The Rooky", whiteJump: "White jump", shield: "Royal Guard",
         boost: "Staff strengthen", blast: "Staff annihilate", invis: "Invisibility", revive: "Revive",
         heal: "Heal", absorb: "Absorb", 
       })[kind];
