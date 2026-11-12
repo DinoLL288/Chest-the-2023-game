@@ -473,7 +473,16 @@
       </section>
 
       <section class="section">
-        <h2>Rules Reference</h2>
+        <h2>Debug Log</h2>
+       <textarea id="debugLog" class="text-input" readonly style="min-height:120px;font-family:monospace;font-size:.78rem;"></textarea>
+       <div class="actions" style="margin-top:8px;">
+         <button id="copyDebug" class="action">Copy debug log</button>
+         <button id="clearDebug" class="action">Clear debug log</button>
+       </div>
+     </section>
+
+     <section class="section">
+       <h2>Rules Reference</h2>
         <div class="rule-list small">
           <details class="rule" open>
             <summary>Pieces and HP</summary>
@@ -611,6 +620,7 @@
       last: [],
       over: false,
       timeStop: null,
+       debugLog: [],
       online: {
         role: "local",
         room: "",
@@ -655,6 +665,11 @@
 
     document.getElementById("newGame").addEventListener("click", init);
     document.getElementById("cancelAbility").addEventListener("click", clearAbility);
+document.getElementById("copyDebug").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText((state.debugLog || []).join("\n")); addLog("Debug log copied."); }
+  catch { addLog("Debug log: " + (state.debugLog || []).join(" | ")); }
+});
+document.getElementById("clearDebug").addEventListener("click", () => { state.debugLog = []; renderDebugLog(); });
     hostGameBtn.addEventListener("click", hostRoom);
     joinGameBtn.addEventListener("click", () => joinRoom(roomInput.value.trim()));
     copyRoomBtn.addEventListener("click", copyRoomLink);
@@ -676,6 +691,7 @@
       state.last = [];
       state.over = false;
       state.timeStop = null;
+      state.debugLog = [];
       state.online = online;
       state.powers = {
         whiteJump: 5, whiteQueenOrders: 2, whiteKingStaffBlast: 1, whiteQueenStaffBlast: 1,
@@ -761,6 +777,7 @@ shield: false,
       renderActions();
       renderLog();
       renderCaptured();
+renderDebugLog();
       renderOnline();
       overlay.classList.toggle("show", Boolean(state.ability));
     }
@@ -1451,9 +1468,16 @@ if (kind === "boost" || kind === "invis") return pieces().filter(x => x.color ==
     function addLog(text) {
       state.log.unshift(text);
       state.log = state.log.slice(0, 24);
+  state.debugLog.push("[" + new Date().toISOString() + "] " + text);
+  if (state.debugLog.length > 500) state.debugLog = state.debugLog.slice(-500);
+  renderDebugLog();
     }
 
-    function renderLog() {
+    function renderDebugLog() {
+  const el = document.getElementById("debugLog");
+  if (el) el.value = (state.debugLog || []).join("\n");
+}
+function renderLog() {
       logEl.innerHTML = state.log.map(line => `<div class="log-line small">${escapeHtml(line)}</div>`).join("");
     }
 
@@ -1584,7 +1608,9 @@ function canStaff(p) {
     function squareName(r, c) { return `${String.fromCharCode(65 + c)}${SIZE - r}`; }
     function escapeHtml(s) { return s.replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])); }
 
-    init();
+    window.addEventListener("error", e => { state.debugLog.push("[ERROR] " + (e.message || e) + " @ " + (e.filename || "") + ":" + (e.lineno || "")); renderDebugLog(); });
+window.addEventListener("unhandledrejection", e => { state.debugLog.push("[PROMISE] " + (e.reason && e.reason.message ? e.reason.message : e.reason)); renderDebugLog(); });
+init();
     if (startRoom) {
       setTimeout(() => joinRoom(startRoom), 500);
     }
