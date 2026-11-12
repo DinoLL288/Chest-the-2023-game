@@ -157,6 +157,18 @@
     .cell.capture::after { background: rgba(255, 71, 87, .72); box-shadow: 0 0 0 8px rgba(255, 71, 87, .2); }
     .cell.ability-target::after { background: rgba(242, 201, 76, .82); box-shadow: 0 0 0 8px rgba(242, 201, 76, .22); }
     .cell.last { box-shadow: inset 0 0 0 4px rgba(110, 220, 137, .8); }
+.cell.capture-anim .piece { animation: capturePulse .45s ease; }
+@keyframes capturePulse {
+  0% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.25); filter: brightness(1.6); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+.log-line { animation: slideIn .2s ease; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
+.captured { animation: popIn .25s ease; }
+@keyframes popIn { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modal { animation: fadeIn .18s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 
     .piece {
       width: 76%;
@@ -620,6 +632,7 @@
       last: [],
       over: false,
       timeStop: null,
+       captureAnim: null,
        debugLog: [],
       online: {
         role: "local",
@@ -691,6 +704,7 @@ document.getElementById("clearDebug").addEventListener("click", () => { state.de
       state.last = [];
       state.over = false;
       state.timeStop = null;
+      state.captureAnim = null;
       state.debugLog = [];
       state.online = online;
       state.powers = {
@@ -763,6 +777,7 @@ shield: false,
           if (state.legal.some(m => m.r === r && m.c === c && m.capture)) cell.classList.add("capture");
           if (targets.some(t => t.r === r && t.c === c)) cell.classList.add("ability-target");
           if (state.last.some(t => t.r === r && t.c === c)) cell.classList.add("last");
+if (state.captureAnim && state.captureAnim.r === r && state.captureAnim.c === c) cell.classList.add("capture-anim");
           const piece = state.board[r][c];
           if (piece) cell.appendChild(pieceEl(piece));
           cell.addEventListener("click", () => onCell(r, c));
@@ -952,6 +967,7 @@ renderDebugLog();
 
     function doMove(piece, move) {
       const from = { r: piece.r, c: piece.c };
+      const didCapture = !!move.capture || !!(state.board[move.r][move.c] && state.board[move.r][move.c].color !== piece.color);
       if (move.capture) damageAt(move.capture.r, move.capture.c, move.damage || 1, piece);
       if (state.board[move.r][move.c] && state.board[move.r][move.c].color !== piece.color) {
         damageAt(move.r, move.c, move.damage || 1, piece);
@@ -988,6 +1004,10 @@ renderDebugLog();
       state.board[move.r][move.c] = piece;
       piece.r = move.r; piece.c = move.c; piece.moved = true;
       state.last = [from, { r: move.r, c: move.c }];
+if (didCapture) {
+  state.captureAnim = { r: move.r, c: move.c };
+  setTimeout(() => { state.captureAnim = null; render(); }, 500);
+}
       let text = `${cap(piece.color)} ${names[piece.type]} moved ${squareName(from.r, from.c)} to ${squareName(move.r, move.c)}.`;
       if (piece.type === "prawn" && (move.r === 0 || move.r === 7)) text += dash(piece);
       if (move.whiteJump) { piece.jumpBoost = false; text += " White jump boost spent."; }
