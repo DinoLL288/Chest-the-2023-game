@@ -858,6 +858,8 @@ renderDebugLog();
         const landR = p.r + dir[p.color] * 2, landC = p.c + dc * 2;
         if (enemyAt(midR, midC, p.color) && empty(landR, landC)) {
           moves.push({ r: landR, c: landC, capture: { r: midR, c: midC }, damage: 1, jump: true });
+          state.debugLog.push("[PRAWN] capture candidate from " + p.r + "," + p.c + " over " + midR + "," + midC + " to " + landR + "," + landC);
+          renderDebugLog();
         }
       }
       return moves;
