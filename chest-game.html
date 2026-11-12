@@ -122,8 +122,8 @@
       max-width: 900px;
       aspect-ratio: 1;
       display: grid;
-      grid-template-columns: repeat(8, 1fr);
-      grid-template-rows: repeat(8, 1fr);
+      grid-template-columns: repeat(9, 1fr);
+      grid-template-rows: repeat(9, 1fr);
       border: 3px solid #0b0c10;
       border-radius: 8px;
       overflow: hidden;
@@ -593,7 +593,7 @@
 
   <script src="peerjs.min.js"></script>
   <script>
-    const SIZE = 8;
+    const SIZE = 9;
     const symbols = { prawn: "P", castle: "C", horsey: "H", king: "K", queen: "Q", staff: "S" };
     const names = { prawn: "Prawn", castle: "Castle", horsey: "Horsey", king: "King", queen: "Queen", staff: "Staff" };
     const maxHp = { prawn: 1, castle: 3, horsey: 2, king: 5, queen: 3, staff: 1 };
@@ -610,6 +610,7 @@
       ability: null,
       last: [],
       over: false,
+      timeStop: null,
       online: {
         role: "local",
         room: "",
@@ -622,10 +623,11 @@
         whiteQueenStaffBlast: 1,
         whiteKingTeleports: 3,
         whiteQueenTeleports: 2,
+        whiteStaffBoost: 3,
         blackInvis: 2,
         blackQueenRevives: 5,
-        blackKingFreeze: 1,
-        blackQueenFreeze: 1
+        blackKingTimeStop: 1,
+        blackQueenTimeStop: 1
       }
     };
 
@@ -666,22 +668,24 @@
       state.board = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
       state.selected = null;
       state.legal = [];
-      state.turn = coin;
+      state.turn = "white";
       state.move = 1;
       state.captured = [];
-      state.log = [`Coin flip result: ${cap(coin)} goes first.`];
+      state.log = [`Coin flip result: ${cap(coin)} side assigned. White goes first.`];
       state.ability = null;
       state.last = [];
       state.over = false;
+      state.timeStop = null;
       state.online = online;
       state.powers = {
         whiteJump: 5, whiteQueenOrders: 2, whiteKingStaffBlast: 1, whiteQueenStaffBlast: 1,
-        whiteKingTeleports: 3, whiteQueenTeleports: 2, blackInvis: 2, blackQueenRevives: 5,
-        blackKingFreeze: 1, blackQueenFreeze: 1
+        whiteKingTeleports: 3, whiteQueenTeleports: 2,
+        whiteStaffBoost: 3, blackInvis: 2, blackQueenRevives: 5,
+        blackKingTimeStop: 1, blackQueenTimeStop: 1
       };
 
       setupSide("black", 0, 1);
-      setupSide("white", 7, 6);
+      setupSide("white", 8, 7);
       render();
       syncOnline("state");
     }
@@ -689,17 +693,18 @@
     function setupSide(color, home, pawnRow) {
       const back = [
         ["castle", 0], ["horsey", 1], ["staff", 2], ["queen", 3],
-        ["king", 4], ["staff", 5], ["horsey", 6], ["castle", 7]
+        ["king", 4], ["staff", 5], ["horsey", 6], ["castle", 7], ["horsey", 8]
       ];
-      back.forEach(([type, col]) => place(makePiece(type, color), home, col));
+      back.forEach(([type, col]) => place(makePiece(type, color, type === "staff" ? (col < 4 ? "queen" : "king") : null), home, col));
       for (let c = 0; c < SIZE; c++) place(makePiece("prawn", color), pawnRow, c);
     }
 
-    function makePiece(type, color) {
+    function makePiece(type, color, owner = null) {
       return {
         id: crypto.randomUUID(),
         type, color,
-        hp: maxHp[type],
+        owner: owner,
+         hp: maxHp[type],
         moved: false,
         heldStaff: false,
         attachedTo: null,
@@ -817,14 +822,18 @@
       if (piece.jumpBoost) {
         moves = mergeMoves(moves, jumpBoostMoves(piece));
       }
-      return moves.filter(m => inBounds(m.r, m.c));
+      let filtered = moves.filter(m => inBounds(m.r, m.c));
+      if (state.timeStop && state.timeStop.active && state.timeStop.color === piece.color) {
+        filtered = filtered.filter(m => !(state.board[m.r]?.[m.c]?.type === "king" && state.board[m.r][m.c].color !== piece.color));
+      }
+      return filtered;
     }
 
     function prawnMoves(p) {
       const moves = [];
       const one = p.r + dir[p.color];
       if (empty(one, p.c)) moves.push({ r: one, c: p.c });
-      const home = p.color === "white" ? 6 : 1;
+      const home = p.color === "white" ? 7 : 1;
       if (p.r === home && empty(one, p.c) && empty(p.r + dir[p.color] * 2, p.c)) moves.push({ r: p.r + dir[p.color] * 2, c: p.c, note: "back-rank push" });
       for (const dc of [-1, 1]) {
         const midR = p.r + dir[p.color], midC = p.c + dc;
@@ -856,8 +865,8 @@
         for (let n = 1; n <= range; n++) {
           const r = p.r + dr * n, c = p.c + dc * n;
           if (!inBounds(r, c)) break;
-          moves.push({ r, c, chargeAttack: true, damage: 99 });
-          if (state.board[r][c]) break;
+          const target = state.board[r][c];
+          if (!target || target.color !== p.color) moves.push({ r, c, chargeAttack: true, damage: 99 });
         }
       }
       return moves;
@@ -888,7 +897,13 @@
         if (!inBounds(r, c)) continue;
         const target = state.board[r][c];
         if (!target) moves.push({ r, c });
-        else if (canCapture && target.color !== p.color) moves.push({ r, c, capture: { r, c }, damage: 1 });
+        else if (canCapture && target.color !== p.color) {
+      moves.push({ r, c, capture: { r, c }, damage: p.boosted ? 2 : 1 });
+      if (p.boosted) {
+        const rr = r + dr, cc = c + dc;
+        if (inBounds(rr, cc) && !state.board[rr][cc]) moves.push({ r: rr, c: cc, capture: { r, c }, damage: 2, passThrough: true });
+      }
+    }
       }
       return moves;
     }
@@ -903,7 +918,7 @@
           if (!target) moves.push({ r, c });
           else {
             if (canCapture && target.color !== p.color) moves.push({ r, c, capture: { r, c }, damage: p.boosted ? 2 : 1 });
-            break;
+            if (!p.boosted) break;
           }
         }
       }
@@ -916,6 +931,33 @@
       if (state.board[move.r][move.c] && state.board[move.r][move.c].color !== piece.color) {
         damageAt(move.r, move.c, move.damage || 1, piece);
         if (state.board[move.r][move.c]) return endTurn(`${names[piece.type]} hit ${names[state.board[move.r][move.c].type]} for ${move.damage || 1}.`);
+      }
+      if (piece.boosted) {
+        const dr = Math.sign(move.r - from.r);
+        const dc = Math.sign(move.c - from.c);
+        if ((dr !== 0 || dc !== 0) && (move.r - from.r === 0 || move.c - from.c === 0 || Math.abs(move.r - from.r) === Math.abs(move.c - from.c))) {
+          let rr = from.r + dr, cc = from.c + dc;
+          while (rr !== move.r || cc !== move.c) {
+            const t = state.board[rr]?.[cc];
+            if (t && t.color !== piece.color) damageAt(rr, cc, 2, piece);
+            rr += dr; cc += dc;
+          }
+        }
+      }
+      if (move.chargeAttack && piece.chargeDir) {
+        const [dr, dc] = piece.chargeDir;
+        const dist = Math.max(Math.abs(move.r - from.r), Math.abs(move.c - from.c));
+        for (let n = 1; n < dist; n++) {
+          const rr = from.r + dr * n, cc = from.c + dc * n;
+          if (!inBounds(rr, cc)) break;
+          const t = state.board[rr][cc];
+          if (t && t.color !== piece.color) {
+            damageAt(rr, cc, 99, piece);
+            if (state.board[rr][cc]) break;
+          } else if (t && t.color === piece.color) {
+            if (!knockAway(t)) break;
+          }
+        }
       }
       state.board[from.r][from.c] = null;
       state.board[move.r][move.c] = piece;
@@ -933,18 +975,19 @@
     function damageAt(r, c, amount, attacker) {
       const target = state.board[r][c];
       if (!target || target.color === attacker.color) return;
+       if (state.timeStop && state.timeStop.active && target.type === "king" && target.color !== attacker.color) return;
       if (target.invisible && attacker.type !== "king") {
         addLog(`${names[target.type]} was invisible and dodged.`);
         return;
       }
       if ((target.type === "king" || target.type === "queen") && redirectShieldDamage(target, amount, attacker)) return;
       target.hp -= amount;
-      if (target.heldStaff) target.heldStaff = false;
+             if (target.heldStaff) { target.heldStaff = false; if (state.timeStop && state.timeStop.active && state.timeStop.holder === target.id) { state.timeStop.active = false; state.timeStop.remaining = 0; } }
       if (target.hp <= 0) capturePiece(target, attacker);
     }
 
     function redirectShieldDamage(royal, amount, attacker) {
-      const shield = pieces().find(p => p.color === royal.color && p.shieldFor === royal.id);
+      const shield = pieces().filter(p => p.color === royal.color && p.shieldFor === royal.id).sort((a, b) => distance(a, royal) - distance(b, royal) || a.hp - b.hp)[0];
       if (!shield) return false;
       shield.hp -= amount;
       addLog(`${names[shield.type]} shielded ${names[royal.type]} for ${amount} damage.`);
@@ -963,7 +1006,7 @@
     }
 
     function dash(p) {
-      const start = p.color === "white" ? 6 : 1;
+      const start = p.color === "white" ? 7 : 1;
       const step = p.color === "white" ? 1 : -1;
       let r = p.r + step;
       let text = " Dash triggered!";
@@ -989,8 +1032,20 @@
       state.legal = [];
       tickEffects();
       if (!state.over) {
-        state.turn = other(state.turn);
-        if (state.turn === "white") state.move++;
+        const ts = state.timeStop;
+        let keepTurn = false;
+        if (ts && ts.active && ts.color === state.turn && ts.remaining > 0) {
+          ts.remaining--;
+          keepTurn = true;
+          if (ts.remaining === 0) ts.active = false;
+        } else if (ts && ts.active && ts.color !== state.turn) {
+          ts.active = false;
+          ts.remaining = 0;
+        }
+        if (!keepTurn) {
+          state.turn = other(state.turn);
+          if (state.turn === "white") state.move++;
+        }
       }
       render();
     }
@@ -1029,20 +1084,20 @@
       const actions = [
         ["Hold/eject staff", () => staffAction(), canStaff(p)],
         ["The Rooky", () => startAbility("rooky"), canRooky(p)],
-        ["Insta movement", () => startAbility("insta"), p?.type === "castle" && !p.instaUsed && state.move > 10],
-        ["Charge horsey", () => startAbility("charge"), p?.type === "horsey" && p.chargeUses > 0],
-        ["The What?", () => startAbility("what"), p?.type === "horsey" && !p.whatUsed],
-        ["Queen of Hungary", () => startAbility("hungary"), p?.type === "queen" && p.color === "white" && uses(p, "hungary") < 3],
+        ["Insta movement", () => startAbility("insta"), (p?.type === "castle" || p?.absorbed === "castle") && !p.instaUsed && state.move > 10],
+        ["Charge horsey", () => startAbility("charge"), (p?.type === "horsey" || p?.absorbed === "horsey") && p.chargeUses > 0],
+        ["The What?", () => startAbility("what"), (p?.type === "horsey" || p?.absorbed === "horsey") && !p.whatUsed],
+        ["Queen of Hungary", () => startAbility("hungary"), (p?.type === "queen" || p?.absorbed === "queen") && p.color === "white" && uses(p, "hungary") < 3],
         ["Royal teleport", () => startAbility("teleport"), canTeleport(p)],
         ["White jump order", () => startAbility("whiteJump"), p?.color === "white" && state.powers.whiteJump > 0],
         ["Order prawn shield", () => startAbility("shield"), p?.type === "queen" && p.color === "white" && state.powers.whiteQueenOrders > 0],
-        ["Staff strengthen", () => startAbility("boost"), p?.type === "staff" && p.color === "white"],
+        ["Staff strengthen", () => startAbility("boost"), p?.type === "staff" && p.color === "white" && state.powers.whiteStaffBoost > 0],
         ["Staff blast", () => startAbility("blast"), canBlast(p)],
         ["Black invisibility", () => startAbility("invis"), p?.color === "black" && state.powers.blackInvis > 0],
         ["Black queen revive", () => startAbility("revive"), p?.type === "queen" && p.color === "black" && state.powers.blackQueenRevives > 0],
         ["Staff heal", () => startAbility("heal"), p?.type === "staff" && p.color === "black"],
         ["Absorb ability", () => startAbility("absorb"), p?.type === "staff" && p.color === "black" && p.staffAbsorbs < 5],
-        ["Time freeze", () => startAbility("freeze"), canFreeze(p)]
+        ["Time stop", () => timeStopAction(), canTimeStop(p)]
       ];
       actions.forEach(([label, fn, enabled]) => {
         const b = document.createElement("button");
@@ -1070,14 +1125,19 @@
       for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) all.push({ r, c });
       if (kind === "insta" || kind === "teleport") return all.filter(t => !state.board[t.r][t.c]);
       if (kind === "what") return all.filter(t => !state.board[t.r][t.c] && (t.r + t.c) % 2 !== (p.r + p.c) % 2);
-      if (kind === "hungary") return all.filter(t => !state.board[t.r][t.c] && t.r * dir[p.color] > p.r * dir[p.color]);
+      if (kind === "hungary") return all.filter(t => {
+  if (state.board[t.r][t.c]) return false;
+  if (t.r * dir[p.color] <= p.r * dir[p.color]) return false;
+  const rd = t.r - p.r, cd = t.c - p.c;
+  return rd === 0 || cd === 0 || Math.abs(rd) === Math.abs(cd);
+});
       if (kind === "charge") return diagTargets(p);
       if (kind === "rooky") return pieces().filter(x => x.color === p.color && x.type === "castle").map(x => ({ r: x.r, c: x.c }));
       if (kind === "whiteJump" || kind === "boost" || kind === "invis") return pieces().filter(x => x.color === p.color && x.type !== "king").map(x => ({ r: x.r, c: x.c }));
       if (kind === "shield") return pieces().filter(x => x.color === p.color && (x.type === "king" || x.type === "queen")).map(x => ({ r: x.r, c: x.c }));
       if (kind === "blast") return rayTargets(p, p.type === "king" ? 5 : 3);
       if (kind === "heal") return adjacent(p).filter(t => state.board[t.r][t.c]?.color === p.color);
-      if (kind === "absorb" || kind === "freeze") return adjacent(p).filter(t => state.board[t.r][t.c]?.color !== p.color);
+      if (kind === "absorb") return adjacent(p).filter(t => state.board[t.r][t.c]?.color !== p.color);
       if (kind === "revive") return state.captured.filter(x => x.color === "black" && !state.board[x.deathR]?.[x.deathC] && adjacent(p).some(t => !state.board[t.r][t.c])).map(x => ({ r: x.deathR, c: x.deathC }));
       return [];
     }
@@ -1088,6 +1148,21 @@
       const kind = state.ability.kind;
       let text = "";
       if (kind === "insta" || kind === "teleport" || kind === "what" || kind === "hungary") {
+        if (kind === "hungary") {
+          const rowDiff = r - p.r;
+          const colDiff = c - p.c;
+          const straight = rowDiff === 0 || colDiff === 0 || Math.abs(rowDiff) === Math.abs(colDiff);
+          if (straight) {
+            const dr = Math.sign(rowDiff);
+            const dc = Math.sign(colDiff);
+            let rr = p.r + dr, cc = p.c + dc;
+            while (rr !== r || cc !== c) {
+              const t = state.board[rr]?.[cc];
+              if (t && t.color !== p.color) damageAt(rr, cc, 2, p);
+              rr += dr; cc += dc;
+            }
+          }
+        }
         moveDirect(p, r, c);
         if (kind === "insta") p.instaUsed = true;
         if (kind === "what") p.whatUsed = true;
@@ -1134,12 +1209,21 @@
       if (kind === "boost") {
         const target = state.board[r][c];
         target.boosted = 2;
+        state.powers.whiteStaffBoost--;
         text = `${names[target.type]} is strengthened for double damage.`;
       }
       if (kind === "blast") {
         const target = state.board[r][c];
-        damageAt(r, c, 99, p);
-        text = `${names[p.type]} used staff blast on ${target ? names[target.type] : "a square"}.`;
+        const forward = dir[p.color];
+        const distance = Math.max(1, Math.abs(r - p.r));
+        for (let n = 1; n <= distance; n++) {
+          const rr = p.r + forward * n;
+          const cc = p.c;
+          if (!inBounds(rr, cc)) break;
+          const t = state.board[rr][cc];
+          if (t && t.color !== p.color && t.type !== "king") damageAt(rr, cc, 99, p);
+        }
+        text = `${names[p.type]} used staff blast forward.`;
         if (p.type === "king") state.powers.whiteKingStaffBlast--;
         else state.powers.whiteQueenStaffBlast--;
       }
@@ -1159,17 +1243,15 @@
         p.absorbed = target.type;
         p.absorbedTurns = 2;
         p.staffAbsorbs++;
+        if (target.type === "horsey") { p.chargeUses = Math.max(p.chargeUses || 0, 2); p.charge = 0; p.chargeDir = null; }
+        if (target.type === "castle") { p.instaUsed = false; }
+        if (target.type === "prawn") { p.moved = false; }
         capturePiece(target, p);
         text = `Black staff absorbed ${names[target.type]} powers for 2 turns.`;
       }
-      if (kind === "freeze") {
-        const target = state.board[r][c];
-        target.frozen = p.type === "king" ? 3 : 2;
-        if (p.type === "king") state.powers.blackKingFreeze--;
-        else state.powers.blackQueenFreeze--;
-        text = `${names[p.type]} froze ${names[target.type]}.`;
-      }
+
       if (kind === "revive") {
+        moveDirect(p, r, c);
         reviveAt(r, c, p);
         state.powers.blackQueenRevives--;
         text = "Black queen revived a captured piece.";
@@ -1183,13 +1265,13 @@
       if (p.heldStaff) {
         const spot = adjacent(p).find(t => empty(t.r, t.c));
         if (!spot) return addLog("No room to eject the staff.");
-        const staff = makePiece("staff", p.color);
+        const staff = makePiece("staff", p.color, p.type);
         place(staff, spot.r, spot.c);
         p.heldStaff = false;
         endTurn(`${names[p.type]} ejected the staff.`);
         return;
       }
-      const staffSpot = adjacent(p).find(t => state.board[t.r][t.c]?.type === "staff" && state.board[t.r][t.c].color === p.color);
+      const staffSpot = adjacent(p).find(t => state.board[t.r][t.c]?.type === "staff" && state.board[t.r][t.c].color === p.color && state.board[t.r][t.c].owner === p.type);
       if (staffSpot && (p.type === "king" || p.type === "queen")) {
         state.board[staffSpot.r][staffSpot.c] = null;
         p.heldStaff = true;
@@ -1200,7 +1282,7 @@
     function reviveAt(r, c, queen) {
       const dead = state.captured.find(x => x.color === "black" && x.deathR === r && x.deathC === c);
       const spot = adjacent(queen).find(t => !state.board[t.r][t.c]);
-      if (!dead || state.board[r][c] || !spot) return;
+      if (!dead || !spot) return;
       state.captured = state.captured.filter(x => x.id !== dead.id);
       dead.hp = Math.max(1, maxHp[dead.type] - 1);
       place(dead, spot.r, spot.c);
@@ -1224,7 +1306,8 @@
         last: state.last,
         over: state.over,
         online: state.online,
-        powers: state.powers
+        timeStop: state.timeStop,
+         powers: state.powers
       };
     }
 
@@ -1241,6 +1324,7 @@
       state.last = remote.last;
       state.over = remote.over;
       state.powers = remote.powers;
+      state.timeStop = remote.timeStop || null;
       state.online = { ...state.online, connected: true };
       render();
       applyingRemote = false;
@@ -1386,7 +1470,17 @@
       state.last = [{ r: ar, c: ac }, { r: br, c: bc }];
     }
 
-    function pieceDescription(p) {
+    function knockAway(piece) {
+  const spots = dirs8().map(([dr, dc]) => ({ r: piece.r + dr, c: piece.c + dc }))
+    .filter(t => inBounds(t.r, t.c) && !state.board[t.r][t.c]);
+  if (!spots.length) return false;
+  const spot = spots[0];
+  state.board[piece.r][piece.c] = null;
+  place(piece, spot.r, spot.c);
+  addLog(`${names[piece.type]} was knocked away.`);
+  return true;
+}
+function pieceDescription(p) {
       return {
         prawn: "Forward mover, checkers jump capture, dash on the end rank.",
         castle: "Sees in 8 directions until blocked; can capture by landing.",
@@ -1402,7 +1496,7 @@
         insta: "Insta movement", teleport: "Royal teleport", what: "The What?", hungary: "Queen of Hungary",
         charge: "The Charge", rooky: "The Rooky", whiteJump: "White jump", shield: "Prawn protection",
         boost: "Staff strengthen", blast: "Staff annihilate", invis: "Invisibility", revive: "Revive",
-        heal: "Heal", absorb: "Absorb", freeze: "Time freeze"
+        heal: "Heal", absorb: "Absorb", 
       })[kind];
     }
 
@@ -1422,18 +1516,30 @@
         revive: "Pick an empty square next to the queen to revive the first captured black piece.",
         heal: "Pick an adjacent friendly piece to heal.",
         absorb: "Pick an adjacent enemy to eat and borrow its movement.",
-        freeze: "Pick an adjacent enemy to freeze."
+        
       })[kind] || "";
     }
 
-    function canStaff(p) {
+    function timeStopAction() {
+  const p = state.selected;
+  if (!canTimeStop(p)) return;
+  const turns = p.type === "king" ? 3 : 2;
+  state.timeStop = { color: p.color, remaining: turns - 1, active: true, holder: p.id };
+  if (p.type === "king") state.powers.blackKingTimeStop--;
+  else state.powers.blackQueenTimeStop--;
+  endTurn(`${names[p.type]} stopped time for ${turns} turns.`);
+}
+function canTimeStop(p) {
+  return p?.color === "black" && p?.heldStaff && ((p.type === "king" && state.powers.blackKingTimeStop > 0) || (p.type === "queen" && state.powers.blackQueenTimeStop > 0));
+}
+function canStaff(p) {
       if (!p || !(p.type === "king" || p.type === "queen")) return false;
-      return p.heldStaff || adjacent(p).some(t => state.board[t.r][t.c]?.type === "staff" && state.board[t.r][t.c].color === p.color);
+      return p.heldStaff || adjacent(p).some(t => state.board[t.r][t.c]?.type === "staff" && state.board[t.r][t.c].color === p.color && state.board[t.r][t.c].owner === p.type);
     }
     function canRooky(p) { return p?.type === "king" && p.rookyUsed < 5 && !isThreatened(p.color) && pieces().some(x => x.color === p.color && x.type === "castle"); }
     function canTeleport(p) { return p?.color === "white" && ((p.type === "king" && state.powers.whiteKingTeleports > 0) || (p.type === "queen" && state.powers.whiteQueenTeleports > 0)) && p.heldStaff; }
     function canBlast(p) { return p?.color === "white" && p.heldStaff && ((p.type === "king" && state.powers.whiteKingStaffBlast > 0) || (p.type === "queen" && state.powers.whiteQueenStaffBlast > 0)); }
-    function canFreeze(p) { return p?.color === "black" && ((p.type === "king" && state.powers.blackKingFreeze > 0) || (p.type === "queen" && state.powers.blackQueenFreeze > 0)); }
+    
     function uses(p, key) { return p?.[key] || 0; }
 
     function isThreatened(color) {
