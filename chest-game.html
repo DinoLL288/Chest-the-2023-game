@@ -1171,7 +1171,7 @@ if (didCapture) {
       const all = [];
       for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) all.push({ r, c });
       if (kind === "insta" || kind === "teleport") return all.filter(t => !state.board[t.r][t.c]);
-      if (kind === "what") return all.filter(t => !state.board[t.r][t.c] && (t.r + t.c) % 2 !== (p.r + p.c) % 2);
+      if (kind === "what") return [[1,0],[-1,0],[0,1],[0,-1]].map(([dr, dc]) => ({ r: p.r + dr, c: p.c + dc })).filter(t => inBounds(t.r, t.c) && !state.board[t.r][t.c] && (t.r + t.c) % 2 !== (p.r + p.c) % 2);
       if (kind === "hungary") return all.filter(t => {
   if (state.board[t.r][t.c]) return false;
   if (t.r * dir[p.color] <= p.r * dir[p.color]) return false;
