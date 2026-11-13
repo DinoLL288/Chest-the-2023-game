@@ -658,6 +658,7 @@
       over: false,
       timeStop: null,
        captureAnim: null,
+consecutivePasses: 0,
        debugLog: [],
       online: {
         role: "local",
@@ -729,7 +730,8 @@ document.getElementById("copyDebug").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText((state.debugLog || []).join("\n")); addLog("Debug log copied."); }
   catch { addLog("Debug log: " + (state.debugLog || []).join(" | ")); }
 });
-document.getElementById("clearDebug").addEventListener("click", () => { state.debugLog = []; renderDebugLog(); });
+document.getElementById("clearDebug").addEventListener("click", () => { state.debugLog = [];
+      state.consecutivePasses = 0; renderDebugLog(); });
 document.getElementById("reportBug").addEventListener("click", () => {
   const body = encodeURIComponent("Debug log:\n\n" + (state.debugLog || []).join("\n"));
   const url = "https://github.com/DinoLL288/Chest-the-2023-game/issues/new?title=" + encodeURIComponent("Bug report") + "&body=" + body;
@@ -761,6 +763,7 @@ const botColor = state.botColor;
       state.timeStop = null;
       state.captureAnim = null;
       state.debugLog = [];
+      state.consecutivePasses = 0;
       try { const saved = JSON.parse(localStorage.getItem("chestDebugLog") || "[]"); if (Array.isArray(saved)) state.debugLog = saved.slice(-500); } catch (e) {}
       state.playerColor = playerColor;
       state.botTier = botTier;
@@ -1043,7 +1046,26 @@ if (piece && piece.color === state.turn && !piece.frozen && (state.online?.role 
       return moves;
     }
 
-    function doMove(piece, move) {
+    function hasAnyLegalMoves(color) {
+  return pieces().some(p => p.color === color && legalMoves(p).length > 0);
+}
+function passTurnIfNeeded() {
+  if (state.over) return;
+  if (hasAnyLegalMoves(state.turn)) { state.consecutivePasses = 0; return; }
+  state.consecutivePasses = (state.consecutivePasses || 0) + 1;
+  if (state.consecutivePasses >= 2) {
+    state.over = true;
+    addLog("Draw - no legal moves for either side.");
+    render();
+    return;
+  }
+  addLog(cap(state.turn) + " has no legal moves; turn passes.");
+  state.turn = other(state.turn);
+  if (state.turn === "white") state.move++;
+  render();
+  setTimeout(passTurnIfNeeded, 100);
+}
+function doMove(piece, move) {
       const from = { r: piece.r, c: piece.c };
       const didCapture = !!move.capture || !!(state.board[move.r][move.c] && state.board[move.r][move.c].color !== piece.color);
       if (move.capture) damageAt(move.capture.r, move.capture.c, move.damage || 1, piece);
@@ -1174,6 +1196,7 @@ if (didCapture) {
         }
       }
       render();
+      if (!state.over) passTurnIfNeeded();
       if (!state.over && state.botTier && state.turn === state.botColor) {
         setTimeout(botMove, 250);
       }
@@ -1659,7 +1682,7 @@ function botMove() {
     const moves = legalMoves(piece);
     moves.forEach(move => candidates.push({ piece, move }));
   });
-  if (!candidates.length) { state.debugLog.push("[BOT] no candidates"); renderDebugLog(); return; }
+  if (!candidates.length) { state.debugLog.push("[BOT] no candidates"); renderDebugLog(); passTurnIfNeeded(); return; }
   function pieceValue(type) { return { prawn:1, staff:1, horsey:3, castle:3, queen:3, king:100 }[type] || 1; }
   function scoreMove(cand) {
     const { piece, move } = cand;
