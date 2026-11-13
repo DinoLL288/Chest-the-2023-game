@@ -1618,6 +1618,8 @@ function renderLog() {
   return true;
 }
 function botMove() {
+  state.debugLog.push("[BOT] turn=" + state.turn + " tier=" + state.botTier + " color=" + state.botColor);
+  renderDebugLog();
   if (state.over || !state.botTier) return;
   const botColor = state.botColor;
   if (state.turn !== botColor) return;
@@ -1626,7 +1628,7 @@ function botMove() {
     const moves = legalMoves(piece);
     moves.forEach(move => candidates.push({ piece, move }));
   });
-  if (!candidates.length) return;
+  if (!candidates.length) { state.debugLog.push("[BOT] no candidates"); renderDebugLog(); return; }
   function pieceValue(type) { return { prawn:1, staff:1, horsey:3, castle:3, queen:3, king:100 }[type] || 1; }
   function scoreMove(cand) {
     const { piece, move } = cand;
@@ -1655,6 +1657,8 @@ function botMove() {
       chosen = candidates[0];
     }
   }
+  state.debugLog.push("[BOT] chose " + chosen.piece.type + " " + chosen.piece.r + "," + chosen.piece.c + " -> " + chosen.move.r + "," + chosen.move.c);
+  renderDebugLog();
   state.selected = chosen.piece;
   state.legal = [chosen.move];
   doMove(chosen.piece, chosen.move);
