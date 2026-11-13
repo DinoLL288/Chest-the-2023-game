@@ -627,6 +627,16 @@
     </div>
   </div>
 
+  <div id="gameOverOverlay" class="overlay" style="align-items:center;justify-items:center;">
+    <div class="modal" style="text-align:center;">
+      <h2 id="gameOverTitle">Game Over</h2>
+      <p id="gameOverText" class="small"></p>
+      <div class="modal-actions" style="justify-content:center;">
+        <button id="gameOverNew" class="primary">New match</button>
+      </div>
+    </div>
+  </div>
+
   <script src="peerjs.min.js"></script>
   <script>
     const SIZE = 9;
@@ -696,6 +706,7 @@ botColor: null,
     let applyingRemote = false;
 
     document.getElementById("newGame").addEventListener("click", init);
+document.getElementById("gameOverNew").addEventListener("click", init);
     document.getElementById("cancelAbility").addEventListener("click", clearAbility);
 document.getElementById("startBot").addEventListener("click", () => {
   const tier = document.getElementById("botTier").value;
@@ -843,6 +854,14 @@ if (state.captureAnim && state.captureAnim.r === r && state.captureAnim.c === c)
 renderDebugLog();
       renderOnline();
       overlay.classList.toggle("show", Boolean(state.ability));
+const go = document.getElementById("gameOverOverlay");
+if (go) {
+  go.classList.toggle("show", Boolean(state.over));
+  if (state.over) {
+    const winner = state.log.find(l => l.includes("wins by taking the king")) || "Game over.";
+    document.getElementById("gameOverText").textContent = winner;
+  }
+}
     }
 
     function pieceEl(piece) {
