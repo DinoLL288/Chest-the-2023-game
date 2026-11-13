@@ -1145,7 +1145,7 @@ if (didCapture) {
       }
       render();
       if (!state.over && state.botTier && state.turn === state.botColor) {
-        setTimeout(botMove, 600);
+        setTimeout(botMove, 250);
       }
     }
 
@@ -1638,13 +1638,6 @@ function botMove() {
     const dest = state.board[move.r]?.[move.c];
     if (dest && dest.color !== botColor) score += pieceValue(dest.type) * 10 + dest.hp;
     if (move.chargeAttack) score += 5;
-    const enemies = pieces().filter(p => p.color !== botColor);
-    let attacked = false;
-    for (const e of enemies) {
-      const em = legalMoves(e);
-      if (em.some(m => m.r === move.r && m.c === move.c)) { attacked = true; break; }
-    }
-    if (attacked) score -= pieceValue(piece.type) * 5;
     score += (4 - Math.abs(move.r - 4)) + (4 - Math.abs(move.c - 4));
     score += Math.random() * 0.5;
     return score;
