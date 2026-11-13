@@ -1077,6 +1077,8 @@ if (didCapture) {
       }
       if ((target.type === "king" || target.type === "queen") && redirectShieldDamage(target, amount, attacker)) return;
       target.hp -= amount;
+       state.debugLog.push("[DMG] " + names[attacker.type] + " -> " + names[target.type] + " for " + amount + " (hp now " + target.hp + ")");
+       renderDebugLog();
              if (target.heldStaff) { target.heldStaff = false; if (state.timeStop && state.timeStop.active && state.timeStop.holder === target.id) { state.timeStop.active = false; state.timeStop.remaining = 0; } }
       if (target.hp <= 0) capturePiece(target, attacker);
     }
