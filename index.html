@@ -882,6 +882,8 @@ if (state.online?.role !== "local" && myColor && state.turn !== myColor) {
 if (piece && piece.color === state.turn && !piece.frozen && (state.online?.role === "local" || piece.color === myColor)) {
         state.selected = piece;
         state.legal = legalMoves(piece);
+        state.debugLog.push("[SELECT] " + names[piece.type] + " at " + piece.r + "," + piece.c + " moves=" + state.legal.length);
+        renderDebugLog();
       } else {
         state.selected = null;
         state.legal = [];
