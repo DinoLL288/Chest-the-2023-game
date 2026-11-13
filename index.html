@@ -687,6 +687,7 @@ botColor: null,
     };
 
     const boardEl = document.getElementById("board");
+const cellEls = Array.from({ length: SIZE }, () => Array(SIZE));
     const selectedInfo = document.getElementById("selectedInfo");
     const actionsEl = document.getElementById("actions");
     const logEl = document.getElementById("log");
@@ -717,7 +718,8 @@ document.getElementById("startBot").addEventListener("click", () => {
   state.botColor = "black";
   state.playerColor = "white";
   state.online = { role: "bot", room: "", connected: true, color: null };
-  init();
+  buildBoard();
+init();
   addLog("Started " + tier + " bot game. You are White.");
 });
 document.getElementById("stopBot").addEventListener("click", () => {
@@ -725,7 +727,8 @@ document.getElementById("stopBot").addEventListener("click", () => {
   state.botColor = null;
   state.playerColor = null;
   state.online = { role: "local", room: "", connected: false, color: null };
-  init();
+  buildBoard();
+init();
   addLog("Bot game stopped.");
 });
 document.getElementById("copyDebug").addEventListener("click", async () => {
@@ -827,25 +830,53 @@ shield: false,
       state.board[r][c] = piece;
     }
 
+    function buildBoard() {
+  boardEl.innerHTML = "";
+  for (let r = 0; r < SIZE; r++) {
+    for (let c = 0; c < SIZE; c++) {
+      const cell = document.createElement("button");
+      cell.className = `cell ${(r + c) % 2 ? "dark" : "light"}`;
+      cell.setAttribute("role", "gridcell");
+      cell.setAttribute("aria-label", squareName(r, c));
+      cell.addEventListener("click", () => onCell(r, c));
+      boardEl.appendChild(cell);
+      cellEls[r][c] = cell;
+    }
+  }
+}
+function updatePieceEl(el, piece) {
+  el.className = `piece ${piece.color}`;
+  el.title = `${cap(piece.color)} ${names[piece.type]} HP ${piece.hp}`;
+  const symbol = el.querySelector(".symbol");
+  if (symbol) symbol.textContent = symbols[piece.type];
+  const hp = el.querySelector(".hp");
+  if (hp) hp.textContent = piece.hp;
+  el.querySelectorAll(".staff-badge,.charged-badge,.invis-badge").forEach(n => n.remove());
+  if (piece.heldStaff || piece.attachedTo) el.insertAdjacentHTML("beforeend", `<span class="staff-badge">S</span>`);
+  if (piece.charge) el.insertAdjacentHTML("beforeend", `<span class="charged-badge">${piece.charge}</span>`);
+  if (piece.invisible) el.insertAdjacentHTML("beforeend", `<span class="invis-badge">I</span>`);
+  if (piece.shield) el.insertAdjacentHTML("beforeend", `<span class="invis-badge" style="background:#6edc89;color:#08131f;">Sh</span>`);
+}
     function render() {
-      boardEl.innerHTML = "";
       const targets = state.ability ? abilityTargets() : [];
       for (let r = 0; r < SIZE; r++) {
         for (let c = 0; c < SIZE; c++) {
-          const cell = document.createElement("button");
+          const cell = cellEls[r][c];
           cell.className = `cell ${(r + c) % 2 ? "dark" : "light"}`;
-          cell.setAttribute("role", "gridcell");
-          cell.setAttribute("aria-label", `${squareName(r, c)}`);
           if (state.selected && state.selected.r === r && state.selected.c === c) cell.classList.add("selected");
           if (state.legal.some(m => m.r === r && m.c === c && !m.capture)) cell.classList.add("move");
           if (state.legal.some(m => m.r === r && m.c === c && m.capture)) cell.classList.add("capture");
           if (targets.some(t => t.r === r && t.c === c)) cell.classList.add("ability-target");
           if (state.last.some(t => t.r === r && t.c === c)) cell.classList.add("last");
-if (state.captureAnim && state.captureAnim.r === r && state.captureAnim.c === c) cell.classList.add("capture-anim");
+          if (state.captureAnim && state.captureAnim.r === r && state.captureAnim.c === c) cell.classList.add("capture-anim");
           const piece = state.board[r][c];
-          if (piece) cell.appendChild(pieceEl(piece));
-          cell.addEventListener("click", () => onCell(r, c));
-          boardEl.appendChild(cell);
+          const existing = cell.querySelector(".piece");
+          if (piece) {
+            if (!existing) cell.appendChild(pieceEl(piece));
+            else updatePieceEl(existing, piece);
+          } else if (existing) {
+            existing.remove();
+          }
         }
       }
       turnText.textContent = `${cap(state.turn)} turn`;
@@ -1825,6 +1856,7 @@ function canStaff(p) {
 
     window.addEventListener("error", e => { state.debugLog.push("[ERROR] " + (e.message || e) + " @ " + (e.filename || "") + ":" + (e.lineno || "")); renderDebugLog(); });
 window.addEventListener("unhandledrejection", e => { state.debugLog.push("[PROMISE] " + (e.reason && e.reason.message ? e.reason.message : e.reason)); renderDebugLog(); });
+buildBoard();
 init();
     if (startRoom) {
       setTimeout(() => joinRoom(startRoom), 500);
