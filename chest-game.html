@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Chest</title>
+<meta name="description" content="Chest, a custom chess-checkers style board game with HP, special moves, staffs, and multiplayer." />
   <style>
     :root {
       --bg: #101114;
@@ -459,7 +460,8 @@
       <section class="section">
         <h2>Solo vs Bot</h2>
        <div class="online-grid">
-         <select id="botTier" class="text-input">
+         <label for="botTier" class="small">Bot difficulty</label>
+         <select id="botTier" class="text-input" aria-label="Bot difficulty">
            <option value="easy">Easy</option>
            <option value="medium" selected>Medium</option>
            <option value="hard">Hard</option>
