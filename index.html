@@ -504,6 +504,7 @@
        <div class="actions" style="margin-top:8px;">
          <button id="copyDebug" class="action">Copy debug log</button>
          <button id="clearDebug" class="action">Clear debug log</button>
+         <button id="reportBug" class="action">Report bug (opens GitHub)</button>
        </div>
      </section>
 
@@ -718,6 +719,11 @@ document.getElementById("copyDebug").addEventListener("click", async () => {
   catch { addLog("Debug log: " + (state.debugLog || []).join(" | ")); }
 });
 document.getElementById("clearDebug").addEventListener("click", () => { state.debugLog = []; renderDebugLog(); });
+document.getElementById("reportBug").addEventListener("click", () => {
+  const body = encodeURIComponent("Debug log:\n\n" + (state.debugLog || []).join("\n"));
+  const url = "https://github.com/DinoLL288/Chest-the-2023-game/issues/new?title=" + encodeURIComponent("Bug report") + "&body=" + body;
+  window.open(url, "_blank");
+});
     hostGameBtn.addEventListener("click", hostRoom);
     joinGameBtn.addEventListener("click", () => joinRoom(roomInput.value.trim()));
     copyRoomBtn.addEventListener("click", copyRoomLink);
@@ -744,6 +750,7 @@ const botColor = state.botColor;
       state.timeStop = null;
       state.captureAnim = null;
       state.debugLog = [];
+      try { const saved = JSON.parse(localStorage.getItem("chestDebugLog") || "[]"); if (Array.isArray(saved)) state.debugLog = saved.slice(-500); } catch (e) {}
       state.playerColor = playerColor;
       state.botTier = botTier;
       state.botColor = botColor;
@@ -1581,6 +1588,7 @@ if (kind === "boost" || kind === "invis") return pieces().filter(x => x.color ==
       state.log = state.log.slice(0, 24);
   state.debugLog.push("[" + new Date().toISOString() + "] " + text);
   if (state.debugLog.length > 500) state.debugLog = state.debugLog.slice(-500);
+  try { localStorage.setItem("chestDebugLog", JSON.stringify(state.debugLog)); } catch (e) {}
   renderDebugLog();
     }
 
