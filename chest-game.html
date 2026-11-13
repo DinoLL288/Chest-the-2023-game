@@ -457,7 +457,21 @@
       </section>
 
       <section class="section">
-        <h2>Online Multiplayer</h2>
+        <h2>Solo vs Bot</h2>
+       <div class="online-grid">
+         <select id="botTier" class="text-input">
+           <option value="easy">Easy</option>
+           <option value="medium" selected>Medium</option>
+           <option value="hard">Hard</option>
+         </select>
+         <button id="startBot" class="action">Start bot game</button>
+         <button id="stopBot" class="action">Stop bot game</button>
+         <div id="botStatus" class="piece-card small">No bot game.</div>
+       </div>
+     </section>
+
+     <section class="section">
+       <h2>Online Multiplayer</h2>
         <div class="online-grid">
           <button id="hostGame" class="action">Host room</button>
           <div class="online-row">
@@ -641,6 +655,8 @@
         color: null
       },
       playerColor: null,
+botTier: null,
+botColor: null,
       powers: {
         whiteJump: 5,
         whiteQueenOrders: 2,
@@ -680,6 +696,23 @@
 
     document.getElementById("newGame").addEventListener("click", init);
     document.getElementById("cancelAbility").addEventListener("click", clearAbility);
+document.getElementById("startBot").addEventListener("click", () => {
+  const tier = document.getElementById("botTier").value;
+  state.botTier = tier;
+  state.botColor = "black";
+  state.playerColor = "white";
+  state.online = { role: "bot", room: "", connected: true, color: null };
+  init();
+  addLog("Started " + tier + " bot game. You are White.");
+});
+document.getElementById("stopBot").addEventListener("click", () => {
+  state.botTier = null;
+  state.botColor = null;
+  state.playerColor = null;
+  state.online = { role: "local", room: "", connected: false, color: null };
+  init();
+  addLog("Bot game stopped.");
+});
 document.getElementById("copyDebug").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText((state.debugLog || []).join("\n")); addLog("Debug log copied."); }
   catch { addLog("Debug log: " + (state.debugLog || []).join(" | ")); }
@@ -695,6 +728,8 @@ document.getElementById("clearDebug").addEventListener("click", () => { state.de
     function init() {
       const online = state.online || { role: "local", room: "", connected: false, color: null };
 const playerColor = state.playerColor;
+const botTier = state.botTier;
+const botColor = state.botColor;
       const coin = Math.random() < 0.5 ? "white" : "black";
       state.board = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
       state.selected = null;
@@ -710,6 +745,8 @@ const playerColor = state.playerColor;
       state.captureAnim = null;
       state.debugLog = [];
       state.playerColor = playerColor;
+      state.botTier = botTier;
+      state.botColor = botColor;
       state.online = online;
       state.powers = {
         whiteJump: 5, whiteQueenOrders: 2, whiteKingStaffBlast: 1, whiteQueenStaffBlast: 1,
@@ -1107,6 +1144,9 @@ if (didCapture) {
         }
       }
       render();
+      if (!state.over && state.botTier && state.turn === state.botColor) {
+        setTimeout(botMove, 600);
+      }
     }
 
     function tickEffects() {
@@ -1577,6 +1617,56 @@ function renderLog() {
   addLog(`${names[piece.type]} was knocked away.`);
   return true;
 }
+function botMove() {
+  if (state.over || !state.botTier) return;
+  const botColor = state.botColor;
+  if (state.turn !== botColor) return;
+  const candidates = [];
+  pieces().filter(p => p.color === botColor).forEach(piece => {
+    const moves = legalMoves(piece);
+    moves.forEach(move => candidates.push({ piece, move }));
+  });
+  if (!candidates.length) return;
+  function pieceValue(type) { return { prawn:1, staff:1, horsey:3, castle:3, queen:3, king:100 }[type] || 1; }
+  function scoreMove(cand) {
+    const { piece, move } = cand;
+    let score = 0;
+    if (move.capture) {
+      const t = state.board[move.capture.r]?.[move.capture.c];
+      if (t) score += pieceValue(t.type) * 10 + t.hp;
+    }
+    const dest = state.board[move.r]?.[move.c];
+    if (dest && dest.color !== botColor) score += pieceValue(dest.type) * 10 + dest.hp;
+    if (move.chargeAttack) score += 5;
+    const enemies = pieces().filter(p => p.color !== botColor);
+    let attacked = false;
+    for (const e of enemies) {
+      const em = legalMoves(e);
+      if (em.some(m => m.r === move.r && m.c === move.c)) { attacked = true; break; }
+    }
+    if (attacked) score -= pieceValue(piece.type) * 5;
+    score += (4 - Math.abs(move.r - 4)) + (4 - Math.abs(move.c - 4));
+    score += Math.random() * 0.5;
+    return score;
+  }
+  let chosen;
+  if (state.botTier === 'easy') {
+    chosen = candidates[Math.floor(Math.random() * candidates.length)];
+  } else {
+    candidates.forEach(c => c.score = scoreMove(c));
+    candidates.sort((a, b) => b.score - a.score);
+    if (state.botTier === 'medium') {
+      const top = candidates.slice(0, Math.min(3, candidates.length));
+      chosen = top[Math.floor(Math.random() * top.length)];
+    } else {
+      chosen = candidates[0];
+    }
+  }
+  state.selected = chosen.piece;
+  state.legal = [chosen.move];
+  doMove(chosen.piece, chosen.move);
+}
+
 function pieceDescription(p) {
       return {
         prawn: "Forward mover, checkers jump capture, dash on the end rank.",
