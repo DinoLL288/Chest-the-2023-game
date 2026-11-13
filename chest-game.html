@@ -642,7 +642,14 @@
   <script src="peerjs.min.js"></script>
   <script>
     const SIZE = 9;
-    const symbols = { prawn: "P", castle: "C", horsey: "H", king: "K", queen: "Q", staff: "S" };
+    const symbols = {
+  prawn: `<svg viewBox="0 0 24 24" width="1em" height="1em"><circle cx="12" cy="7" r="3" fill="currentColor"/><path d="M8 12 L12 20 L16 12 Z" fill="currentColor"/></svg>`,
+  castle: `<svg viewBox="0 0 24 24" width="1em" height="1em"><path d="M5 4h2v3h2V4h2v3h2V4h2v3h2V4h2v4l-2 2v10H7V10L5 8V4z" fill="currentColor"/></svg>`,
+  horsey: `<svg viewBox="0 0 24 24" width="1em" height="1em"><path d="M7 20h10v-2H7v2zM9 18l-2-6 3-2 1-4 4 2 2 4-2 2-1 4H9z" fill="currentColor"/></svg>`,
+  king: `<svg viewBox="0 0 24 24" width="1em" height="1em"><path d="M4 18h16v2H4v-2zM4 16l3-8 5 4 4-6 4 6 3-4v8H4z" fill="currentColor"/></svg>`,
+  queen: `<svg viewBox="0 0 24 24" width="1em" height="1em"><path d="M4 18h16v2H4v-2zM4 16l2-9 4 5 2-7 2 7 4-5 2 9H4z" fill="currentColor"/></svg>`,
+  staff: `<svg viewBox="0 0 24 24" width="1em" height="1em"><path d="M12 2l2 4-2 2-2-2 2-4zM11 8h2v12h-2V8z" fill="currentColor"/></svg>`
+};
     const names = { prawn: "Prawn", castle: "Castle", horsey: "Horsey", king: "King", queen: "Queen", staff: "Staff" };
     const maxHp = { prawn: 1, castle: 3, horsey: 2, king: 5, queen: 3, staff: 1 };
     const dir = { white: -1, black: 1 };
@@ -848,7 +855,7 @@ function updatePieceEl(el, piece) {
   el.className = `piece ${piece.color}`;
   el.title = `${cap(piece.color)} ${names[piece.type]} HP ${piece.hp}`;
   const symbol = el.querySelector(".symbol");
-  if (symbol) symbol.textContent = symbols[piece.type];
+  if (symbol) symbol.innerHTML = symbols[piece.type];
   const hp = el.querySelector(".hp");
   if (hp) hp.textContent = piece.hp;
   el.querySelectorAll(".staff-badge,.charged-badge,.invis-badge").forEach(n => n.remove());
